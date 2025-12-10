@@ -43,6 +43,11 @@ function q(value) {
   return `'${String(value).replace(/'/g, "''")}'`;
 }
 
+function tableHasColumn(table, column) {
+  const rows = runQuery(`PRAGMA table_info(${table})`);
+  return rows.some((r) => r.name === column);
+}
+
 function initDb() {
   ensureDataDirs();
   runSql(
@@ -62,14 +67,16 @@ function initDb() {
       UNIQUE(deck_id, question, answer)
     );
     CREATE TABLE IF NOT EXISTS progress (
-      card_key TEXT PRIMARY KEY,
+      card_id INTEGER PRIMARY KEY,
       deck_id TEXT NOT NULL,
-      category TEXT NOT NULL
+      category TEXT NOT NULL,
+      FOREIGN KEY(card_id) REFERENCES cards(id) ON DELETE CASCADE
     );
     CREATE TABLE IF NOT EXISTS ratings (
-      card_key TEXT PRIMARY KEY,
+      card_id INTEGER PRIMARY KEY,
       deck_id TEXT NOT NULL,
-      rating TEXT NOT NULL CHECK (rating IN ('up','down'))
+      rating TEXT NOT NULL CHECK (rating IN ('up','down')),
+      FOREIGN KEY(card_id) REFERENCES cards(id) ON DELETE CASCADE
     );
     `
   );
@@ -78,6 +85,7 @@ function initDb() {
   if (existingDecks.length === 0) {
     seedFromCsv();
   }
+  migrateProgressRatingsToCardIds();
 }
 
 function getDecksFromDb() {
@@ -100,6 +108,44 @@ function seedFromCsv() {
       runSql(`INSERT OR IGNORE INTO cards (deck_id, question, answer, image) VALUES ${values}`);
     }
   });
+}
+
+function migrateProgressRatingsToCardIds() {
+  // If progress already uses card_id, nothing to do.
+  if (tableHasColumn("progress", "card_id") && !tableHasColumn("progress", "card_key")) {
+    return;
+  }
+  // Migrate progress
+  runSqlBatch([
+    `CREATE TABLE IF NOT EXISTS progress_new (
+      card_id INTEGER PRIMARY KEY,
+      deck_id TEXT NOT NULL,
+      category TEXT NOT NULL,
+      FOREIGN KEY(card_id) REFERENCES cards(id) ON DELETE CASCADE
+    )`,
+    `INSERT OR IGNORE INTO progress_new (card_id, deck_id, category)
+     SELECT c.id, c.deck_id, p.category
+     FROM progress p
+     JOIN cards c ON (c.question || '|||' || c.answer) = p.card_key`,
+    `DROP TABLE progress`,
+    `ALTER TABLE progress_new RENAME TO progress`,
+  ]);
+
+  // Migrate ratings
+  runSqlBatch([
+    `CREATE TABLE IF NOT EXISTS ratings_new (
+      card_id INTEGER PRIMARY KEY,
+      deck_id TEXT NOT NULL,
+      rating TEXT NOT NULL CHECK (rating IN ('up','down')),
+      FOREIGN KEY(card_id) REFERENCES cards(id) ON DELETE CASCADE
+    )`,
+    `INSERT OR IGNORE INTO ratings_new (card_id, deck_id, rating)
+     SELECT c.id, c.deck_id, r.rating
+     FROM ratings r
+     JOIN cards c ON (c.question || '|||' || c.answer) = r.card_key`,
+    `DROP TABLE ratings`,
+    `ALTER TABLE ratings_new RENAME TO ratings`,
+  ]);
 }
 
 function listDecks() {
@@ -146,12 +192,10 @@ function smartSplit(line, delimiter = ",") {
 function getDeck(deckId) {
   const deckRow = runQuery(`SELECT id, title, filename FROM decks WHERE id = ${q(deckId)} LIMIT 1`)[0];
   if (!deckRow) return null;
-  const cards = runQuery(`SELECT question, answer, image FROM cards WHERE deck_id = ${q(deckId)} ORDER BY id`);
+  const cards = runQuery(`SELECT id, question, answer, image FROM cards WHERE deck_id = ${q(deckId)} ORDER BY id`);
   const enriched = cards.map((c) => {
-    const key = cardKey(c);
     return {
       ...c,
-      key,
       image: c.image ? `/media/${c.image}` : null,
     };
   });
@@ -237,19 +281,19 @@ function createServer() {
     if (req.method === "GET" && pathParts[0] === "api" && pathParts[1] === "decks" && pathParts[2]) {
       const deck = getDeck(pathParts[2]);
       if (!deck) return sendJson(res, 404, { error: "Deck not found" });
-      const progressRows = runQuery(`SELECT card_key, category FROM progress WHERE deck_id = ${q(deck.id)}`);
-      const progress = Object.fromEntries(progressRows.map((p) => [p.card_key, p.category]));
-      const ratingRows = runQuery(`SELECT card_key, rating FROM ratings WHERE deck_id = ${q(deck.id)}`);
-      const ratings = Object.fromEntries(ratingRows.map((r) => [r.card_key, r.rating]));
+      const progressRows = runQuery(`SELECT card_id, category FROM progress WHERE deck_id = ${q(deck.id)}`);
+      const progress = Object.fromEntries(progressRows.map((p) => [String(p.card_id), p.category]));
+      const ratingRows = runQuery(`SELECT card_id, rating FROM ratings WHERE deck_id = ${q(deck.id)}`);
+      const ratings = Object.fromEntries(ratingRows.map((r) => [String(r.card_id), r.rating]));
       return sendJson(res, 200, { ...deck, progress, ratings, categories: CATEGORY_LABELS });
     }
 
     if (req.method === "POST" && pathParts[0] === "api" && pathParts[1] === "decks" && pathParts[2] && pathParts[3] === "progress") {
       const body = await parseBody(req);
-      const { cardKey, category } = body || {};
-      if (!cardKey || typeof cardKey !== "string") return sendJson(res, 400, { error: "cardKey is required" });
+      const { cardId, category } = body || {};
+      if (cardId === undefined || cardId === null) return sendJson(res, 400, { error: "cardId is required" });
       if (!CATEGORY_LABELS.includes(category)) return sendJson(res, 400, { error: "Invalid category" });
-      runSql(`INSERT OR REPLACE INTO progress (card_key, deck_id, category) VALUES (${q(cardKey)}, ${q(pathParts[2])}, ${q(category)})`);
+      runSql(`INSERT OR REPLACE INTO progress (card_id, deck_id, category) VALUES (${q(cardId)}, ${q(pathParts[2])}, ${q(category)})`);
       return sendJson(res, 200, { ok: true });
     }
 
@@ -260,16 +304,19 @@ function createServer() {
       const body = await parseBody(req);
       if (!body || !Array.isArray(body.cards)) return sendJson(res, 400, { error: "cards array required" });
 
-      const existing = runQuery(`SELECT question, answer, image FROM cards WHERE deck_id = ${q(deckId)}`);
-      const existingMap = Object.fromEntries(existing.map((c) => [cardKey(c), c.image]));
+      const existing = runQuery(`SELECT id, question, answer, image FROM cards WHERE deck_id = ${q(deckId)}`);
+      const existingById = new Map(existing.map((c) => [c.id, c]));
 
       const rows = [];
-      const inserts = [];
+      const insertValues = [];
+      const updateStatements = [];
+      const keepIds = new Set();
+
       for (const item of body.cards) {
         if (!item.question || !item.answer) continue;
         const question = String(item.question);
         const answer = String(item.answer);
-        const key = `${question}|||${answer}`;
+        const existingCard = item.id ? existingById.get(item.id) : null;
 
         let filename = null;
         if (item.imageData && typeof item.imageData === "string" && item.imageData.startsWith("data:")) {
@@ -278,18 +325,28 @@ function createServer() {
           filename = path.basename(item.imagePath.replace("/media/", ""));
         } else if (item.removeImage) {
           filename = null;
-        } else if (existingMap[item.key]) {
-          filename = existingMap[item.key];
+        } else if (existingCard && existingCard.image) {
+          filename = existingCard.image;
         }
 
-        inserts.push(`(${q(deckId)}, ${q(question)}, ${q(answer)}, ${filename ? q(filename) : "NULL"})`);
+        if (existingCard) {
+          keepIds.add(existingCard.id);
+          updateStatements.push(
+            `UPDATE cards SET question=${q(question)}, answer=${q(answer)}, image=${filename ? q(filename) : "NULL"} WHERE id=${existingCard.id}`
+          );
+        } else {
+          insertValues.push(`(${q(deckId)}, ${q(question)}, ${q(answer)}, ${filename ? q(filename) : "NULL"})`);
+        }
         rows.push({ question, answer });
       }
 
-      const stmts = [`BEGIN`, `DELETE FROM cards WHERE deck_id = ${q(deckId)}`];
-      if (inserts.length) {
-        stmts.push(`INSERT INTO cards (deck_id, question, answer, image) VALUES ${inserts.join(",")}`);
-      }
+      const stmts = [`BEGIN`];
+      if (updateStatements.length) stmts.push(...updateStatements);
+      if (insertValues.length) stmts.push(`INSERT INTO cards (deck_id, question, answer, image) VALUES ${insertValues.join(",")}`);
+      const keepList = [...keepIds].join(",");
+      stmts.push(`DELETE FROM cards WHERE deck_id = ${q(deckId)}${keepIds.size ? ` AND id NOT IN (${keepList})` : ""}`);
+      stmts.push(`DELETE FROM progress WHERE deck_id = ${q(deckId)} AND card_id NOT IN (SELECT id FROM cards WHERE deck_id=${q(deckId)})`);
+      stmts.push(`DELETE FROM ratings WHERE deck_id = ${q(deckId)} AND card_id NOT IN (SELECT id FROM cards WHERE deck_id=${q(deckId)})`);
       stmts.push(`COMMIT`);
       runSqlBatch(stmts);
 
@@ -301,13 +358,13 @@ function createServer() {
     if (req.method === "POST" && pathParts[0] === "api" && pathParts[1] === "decks" && pathParts[2] && pathParts[3] === "rating") {
       const deckId = pathParts[2];
       const body = await parseBody(req);
-      const { cardKey, rating } = body || {};
-      if (!cardKey || typeof cardKey !== "string") return sendJson(res, 400, { error: "cardKey is required" });
+      const { cardId, rating } = body || {};
+      if (cardId === undefined || cardId === null) return sendJson(res, 400, { error: "cardId is required" });
       if (rating !== "up" && rating !== "down" && rating !== null) return sendJson(res, 400, { error: "rating must be up, down, or null" });
       if (rating === null) {
-        runSql(`DELETE FROM ratings WHERE card_key = ${q(cardKey)} AND deck_id = ${q(deckId)}`);
+        runSql(`DELETE FROM ratings WHERE card_id = ${q(cardId)} AND deck_id = ${q(deckId)}`);
       } else {
-        runSql(`INSERT OR REPLACE INTO ratings (card_key, deck_id, rating) VALUES (${q(cardKey)}, ${q(deckId)}, ${q(rating)})`);
+        runSql(`INSERT OR REPLACE INTO ratings (card_id, deck_id, rating) VALUES (${q(cardId)}, ${q(deckId)}, ${q(rating)})`);
       }
       return sendJson(res, 200, { ok: true });
     }

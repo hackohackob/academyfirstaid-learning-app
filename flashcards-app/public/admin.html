@@ -194,7 +194,13 @@
         deckId = id;
         const res = await fetch(`/api/decks/${id}`);
         const data = await res.json();
-        cards = data.cards.map((c) => ({ ...c, imageData: null, removeImage: false, expanded: false }));
+        cards = data.cards.map((c) => ({
+          ...c,
+          id: c.id,
+          imageData: null,
+          removeImage: false,
+          expanded: false,
+        }));
         render();
       }
 
@@ -307,7 +313,7 @@
       }
 
       function addCard() {
-        cards.push({ question: "", answer: "", key: null, image: null, imageData: null, removeImage: false, expanded: true });
+        cards.push({ id: null, question: "", answer: "", image: null, imageData: null, removeImage: false, expanded: true });
         render();
         const last = cardsEl.lastElementChild;
         if (last) {
@@ -342,9 +348,9 @@
         statusEl.textContent = "Saving...";
         const payload = {
           cards: cards.map((c) => ({
+            id: c.id,
             question: c.question,
             answer: c.answer,
-            key: c.key,
             imageData: c.imageData || null,
             imagePath: c.image && !c.imageData && !c.removeImage ? c.image : null,
             removeImage: !!c.removeImage,

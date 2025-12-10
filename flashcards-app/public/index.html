@@ -326,7 +326,7 @@
         images = {};
         ratings = data.ratings || {};
         cards.forEach((c) => {
-          if (c.image) images[cardKey(c)] = c.image;
+          if (c.image) images[String(c.id)] = c.image;
         });
         index = 0;
         renderCategories();
@@ -354,7 +354,7 @@
         questionEl.textContent = card.question;
         answerEl.textContent = showAnswer ? card.answer : "";
         progressEl.textContent = `Card ${index + 1} of ${cards.length}`;
-        const current = progressMap[cardKey(card)];
+        const current = progressMap[String(card.id)];
         statusEl.textContent = current ? `Previously: ${current}` : "Not yet rated";
         [...controls.children].forEach((btn) => {
           btn.classList.toggle("selected", btn.textContent === current);
@@ -395,18 +395,14 @@
 
       async function selectCategory(cat) {
         const card = cards[index];
-        const key = cardKey(card);
+        const key = String(card.id);
         progressMap[key] = cat;
         move(1);
         await fetch(`/api/decks/${deck.id}/progress`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ cardKey: key, category: cat }),
+          body: JSON.stringify({ cardId: card.id, category: cat }),
         });
-      }
-
-      function cardKey(card) {
-        return `${card.question}|||${card.answer}`;
       }
 
       function reveal() {
@@ -424,7 +420,7 @@
       }
 
       function renderImage(card) {
-        const key = cardKey(card);
+        const key = String(card.id);
         let img = document.getElementById("card-image");
         if (img) img.remove();
         const url = images[key];
@@ -446,7 +442,7 @@
 
       function renderRating() {
         const card = cards[index];
-        const key = cardKey(card);
+        const key = String(card.id);
         const current = ratings[key];
         ratingUp.classList.toggle("selected", current === "up");
         ratingDown.classList.toggle("selected", current === "down");
@@ -454,14 +450,14 @@
 
       async function selectRating(choice) {
         const card = cards[index];
-        const key = cardKey(card);
+        const key = String(card.id);
         const newRating = ratings[key] === choice ? null : choice;
         ratings[key] = newRating;
         renderRating();
         await fetch(`/api/decks/${deck.id}/rating`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ cardKey: key, rating: newRating }),
+          body: JSON.stringify({ cardId: card.id, rating: newRating }),
         });
       }
     </script>
