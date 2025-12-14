@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Flashcards Admin</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        --bg: #0c0c10;
+        --panel: #12141c;
+        --accent: #d7ff54;
+        --muted: #9aa3b5;
+        --text: #eef2ff;
+        --card: #141824;
+        --card-border: #1f2330;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: "Space Grotesk", "Inter", system-ui, -apple-system, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        min-height: 100vh;
+      }
+      header {
+        padding: 16px 22px;
+        border-bottom: 1px solid #1c1f2a;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        background: var(--bg);
+      }
+      a {
+        color: var(--accent);
+      }
+      main {
+        padding: 22px;
+        display: grid;
+        gap: 16px;
+      }
+      .controls {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      select,
+      button {
+        background: var(--card);
+        color: var(--text);
+        border: 1px solid var(--card-border);
+        border-radius: 10px;
+        padding: 10px 14px;
+        font-size: 14px;
+      }
+      button.cta {
+        background: var(--accent);
+        color: #0b0b0e;
+        border-color: transparent;
+        font-weight: 700;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--card-border);
+        border-radius: 14px;
+        padding: 0;
+        overflow: hidden;
+      }
+      .card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 14px;
+        cursor: pointer;
+        border-bottom: 1px solid var(--card-border);
+      }
+      .card-title {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        font-weight: 600;
+      }
+      .card-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--muted);
+      }
+      .caret {
+        transition: transform 120ms ease;
+      }
+      .caret.open {
+        transform: rotate(180deg);
+      }
+      .card-body {
+        padding: 14px;
+        display: grid;
+        gap: 10px;
+      }
+      label {
+        font-size: 13px;
+        color: var(--muted);
+      }
+      textarea {
+        width: 100%;
+        min-height: 60px;
+        border-radius: 10px;
+        border: 1px solid var(--card-border);
+        background: #0f121c;
+        color: var(--text);
+        padding: 10px;
+        font-family: inherit;
+        font-size: 14px;
+      }
+      .card-grid {
+        display: grid;
+        gap: 12px;
+      }
+      .drop {
+        border: 1px dashed var(--card-border);
+        border-radius: 10px;
+        padding: 12px;
+        text-align: center;
+        color: var(--muted);
+        cursor: pointer;
+      }
+      .thumb {
+        max-width: 200px;
+        border-radius: 10px;
+        border: 1px solid var(--card-border);
+      }
+      .row {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <a href="/index.html">← Back</a>
+      <select id="deckSelect"></select>
+      <button id="addCard">Add card</button>
+      <button id="saveBtn" class="cta">Save</button>
+      <span id="status"></span>
+    </header>
+    <main>
+      <div id="cards" class="card-grid"></div>
+    </main>
+    <script>
+      const deckSelect = document.getElementById("deckSelect");
+      const cardsEl = document.getElementById("cards");
+      const statusEl = document.getElementById("status");
+      const addBtn = document.getElementById("addCard");
+      const saveBtn = document.getElementById("saveBtn");
+
+      let deckId = null;
+      let cards = [];
+
+      init();
+
+      async function init() {
+        await loadDecks();
+        deckSelect.onchange = () => loadDeck(deckSelect.value);
+        addBtn.onclick = addCard;
+        saveBtn.onclick = save;
+      }
+
+      async function loadDecks() {
+        const res = await fetch("/api/decks");
+        const data = await res.json();
+        deckSelect.innerHTML = "";
+        data.decks.forEach((d, i) => {
+          const opt = document.createElement("option");
+          opt.value = d.id;
+          opt.textContent = d.title;
+          if (i === 0) opt.selected = true;
+          deckSelect.appendChild(opt);
+        });
+        if (data.decks[0]) await loadDeck(data.decks[0].id);
+      }
+
+      async function loadDeck(id) {
+        deckId = id;
+        const res = await fetch(`/api/decks/${id}`);
+        const data = await res.json();
+        cards = data.cards.map((c) => ({
+          ...c,
+          id: c.id,
+          imageData: null,
+          removeImage: false,
+          expanded: false,
+        }));
+        render();
+      }
+
+      function render() {
+        cardsEl.innerHTML = "";
+        cards.forEach((card, idx) => {
+          if (card.expanded === undefined) card.expanded = false;
+          const wrapper = document.createElement("div");
+          wrapper.className = "card";
+          wrapper.dataset.idx = idx;
+
+          const header = document.createElement("div");
+          header.className = "card-header";
+          header.onclick = () => {
+            card.expanded = !card.expanded;
+            render();
+          };
+          const title = document.createElement("div");
+          title.className = "card-title";
+          const text = card.question ? truncate(card.question, 80) : "(untitled)";
+          title.textContent = `#${idx + 1} • ${text}`;
+          const meta = document.createElement("div");
+          meta.className = "card-meta";
+          if (card.image || card.imageData) {
+            const badge = document.createElement("span");
+            badge.textContent = "📷";
+            meta.appendChild(badge);
+          }
+          const caret = document.createElement("span");
+          caret.className = "caret" + (card.expanded ? " open" : "");
+          caret.textContent = "▾";
+          meta.appendChild(caret);
+          header.appendChild(title);
+          header.appendChild(meta);
+
+          const body = document.createElement("div");
+          body.className = "card-body";
+          body.style.display = card.expanded ? "grid" : "none";
+
+          const qLabel = document.createElement("label");
+          qLabel.textContent = "Question";
+          const qArea = document.createElement("textarea");
+          qArea.value = card.question || "";
+          qArea.oninput = (e) => (card.question = e.target.value);
+
+          const aLabel = document.createElement("label");
+          aLabel.textContent = "Answer";
+          const aArea = document.createElement("textarea");
+          aArea.value = card.answer || "";
+          aArea.oninput = (e) => (card.answer = e.target.value);
+
+          const dropRow = document.createElement("div");
+          dropRow.className = "row";
+          dropRow.style.justifyContent = "space-between";
+          const drop = document.createElement("div");
+          drop.className = "drop";
+          drop.textContent = "Drop image or click";
+          drop.onclick = () => chooseFile(idx);
+          drop.ondragover = (e) => {
+            e.preventDefault();
+            drop.style.borderColor = "var(--accent)";
+          };
+          drop.ondragleave = () => (drop.style.borderColor = "var(--card-border)");
+          drop.ondrop = (e) => {
+            e.preventDefault();
+            drop.style.borderColor = "var(--card-border)";
+            if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0], idx);
+          };
+
+          const removeRow = document.createElement("div");
+          removeRow.className = "row";
+          removeRow.style.gap = "6px";
+          const removeBtn = document.createElement("button");
+          removeBtn.textContent = "Remove image";
+          removeBtn.onclick = () => {
+            card.imageData = null;
+            card.image = null;
+            card.imagePath = null;
+            card.removeImage = true;
+            render();
+          };
+          removeRow.appendChild(removeBtn);
+          dropRow.appendChild(drop);
+          dropRow.appendChild(removeRow);
+
+          const previewRow = document.createElement("div");
+          previewRow.className = "row";
+          const url = card.imageData || card.image || card.imagePath;
+          if (url) {
+            const img = document.createElement("img");
+            img.src = url;
+            img.className = "thumb";
+            previewRow.appendChild(img);
+          } else {
+            previewRow.textContent = "No image";
+            previewRow.style.color = "var(--muted)";
+          }
+
+          body.appendChild(qLabel);
+          body.appendChild(qArea);
+          body.appendChild(aLabel);
+          body.appendChild(aArea);
+          body.appendChild(dropRow);
+          body.appendChild(previewRow);
+
+          wrapper.appendChild(header);
+          wrapper.appendChild(body);
+          cardsEl.appendChild(wrapper);
+        });
+      }
+
+      function addCard() {
+        cards.push({ id: null, question: "", answer: "", image: null, imageData: null, removeImage: false, expanded: true });
+        render();
+        const last = cardsEl.lastElementChild;
+        if (last) {
+          last.scrollIntoView({ behavior: "smooth", block: "start" });
+          const textarea = last.querySelector("textarea");
+          if (textarea) textarea.focus();
+        }
+      }
+
+      function chooseFile(idx) {
+        const input = document.createElement("input");
+        input.type = "file";
+        input.accept = "image/*";
+        input.onchange = () => {
+          if (input.files && input.files[0]) handleFile(input.files[0], idx);
+        };
+        input.click();
+      }
+
+      function handleFile(file, idx) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          cards[idx].imageData = reader.result;
+          cards[idx].image = null;
+          cards[idx].removeImage = false;
+          render();
+        };
+        reader.readAsDataURL(file);
+      }
+
+      async function save() {
+        statusEl.textContent = "Saving...";
+        const payload = {
+          cards: cards.map((c) => ({
+            id: c.id,
+            question: c.question,
+            answer: c.answer,
+            imageData: c.imageData || null,
+            imagePath: c.image && !c.imageData && !c.removeImage ? c.image : null,
+            removeImage: !!c.removeImage,
+          })),
+        };
+        const res = await fetch(`/api/admin/decks/${deckId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          statusEl.textContent = "Save failed";
+          return;
+        }
+        statusEl.textContent = "Saved";
+        await loadDeck(deckId);
+      }
+
+      function truncate(str, max) {
+        if (!str) return "";
+        if (str.length <= max) return str;
+        return str.slice(0, max - 1) + "…";
+      }
+    </script>
+  </body>
+</html>

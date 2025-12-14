@@ -83,11 +83,12 @@ function transliterateBgToLatin(text) {
 function parseVideoName(fileName) {
   const stem = fileName.replace(/\.[^.]+$/, "");
   const match = stem.match(/^\s*(\d+)\s*[._-]?\s*(.*)$/);
-  if (!match) {
-    throw new Error(`Could not parse video name: ${fileName}`);
+  if (match) {
+    const [, number, title] = match;
+    return { number, title: title || stem };
   }
-  const [, number, title] = match;
-  return { number, title };
+  // If no number prefix, use "0" as number and whole stem as title
+  return { number: "0", title: stem };
 }
 
 function ensureFfmpeg() {
@@ -127,11 +128,28 @@ async function main() {
   await ensureFfmpeg();
   fs.mkdirSync(AUDIO_DIR, { recursive: true });
 
-  const files = fs.readdirSync(VIDEO_DIR).filter((file) => file.toLowerCase().endsWith(".mp4")).sort();
+  // Get pattern from command-line argument
+  const pattern = process.argv[2];
+
+  let files = fs.readdirSync(VIDEO_DIR).filter((file) => file.toLowerCase().endsWith(".mp4")).sort();
+  
+  // Filter files by pattern if provided
+  if (pattern) {
+    const regex = new RegExp(pattern, "i"); // case-insensitive
+    files = files.filter((file) => regex.test(file));
+    if (files.length === 0) {
+      console.log(`No .mp4 files found matching pattern: ${pattern}`);
+      return;
+    }
+    console.log(`Filtering files by pattern: ${pattern}`);
+  }
+
   if (files.length === 0) {
     console.log("No .mp4 files found in the videos directory.");
     return;
   }
+
+  console.log(`Processing ${files.length} file(s)...`);
 
   for (const file of files) {
     try {

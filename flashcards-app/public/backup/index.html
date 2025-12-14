@@ -1,0 +1,684 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Flashcards</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        --bg: #0c0c10;
+        --panel: #12141c;
+        --accent: #d7ff54;
+        --muted: #9aa3b5;
+        --text: #eef2ff;
+        --card: #141824;
+        --card-border: #1f2330;
+        --shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: "Space Grotesk", "Inter", system-ui, -apple-system, sans-serif;
+        background: radial-gradient(circle at 20% 20%, rgba(215, 255, 84, 0.08), transparent 25%),
+          radial-gradient(circle at 80% 0%, rgba(78, 117, 255, 0.08), transparent 25%),
+          var(--bg);
+        color: var(--text);
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+      header {
+        padding: 18px 28px;
+        border-bottom: 1px solid #1c1f2a;
+        background: rgba(12, 12, 16, 0.8);
+        backdrop-filter: blur(12px);
+        position: sticky;
+        top: 0;
+        z-index: 2;
+      }
+      .bar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        background: rgba(12, 12, 16, 0.9);
+        backdrop-filter: blur(10px);
+      }
+      .bar-left {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .bar-right {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .avatar {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        background: #232b39;
+        color: var(--accent);
+        font-weight: 700;
+        letter-spacing: 0.02em;
+      }
+      .auth-btn {
+        border: 1px solid var(--card-border);
+        background: #181c26;
+        color: var(--text);
+        border-radius: 10px;
+        padding: 8px 12px;
+        cursor: pointer;
+      }
+      .auth-panel {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 10;
+      }
+      .auth-card {
+        background: var(--card);
+        border: 1px solid var(--card-border);
+        border-radius: 12px;
+        padding: 18px;
+        width: min(360px, 90vw);
+        display: grid;
+        gap: 10px;
+      }
+      .auth-card h2 {
+        margin: 0;
+      }
+      .auth-card input {
+        width: 100%;
+        border-radius: 10px;
+        border: 1px solid var(--card-border);
+        background: #0f121c;
+        color: var(--text);
+        padding: 10px;
+        font-family: inherit;
+      }
+      .auth-actions {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .linkish {
+        color: var(--accent);
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 0;
+      }
+      select,
+      button {
+        background: var(--card);
+        color: var(--text);
+        border: 1px solid var(--card-border);
+        border-radius: 10px;
+        padding: 10px 14px;
+        font-size: 14px;
+      }
+      select:focus,
+      button:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+      button.cta {
+        background: var(--accent);
+        color: #0b0b0e;
+        border-color: transparent;
+        font-weight: 700;
+        letter-spacing: 0.01em;
+      }
+      main {
+        flex: 1;
+        display: grid;
+        place-items: center;
+        padding: 32px;
+      }
+      .card {
+        width: min(900px, 100%);
+        background: var(--card);
+        border: 1px solid var(--card-border);
+        border-radius: 18px;
+        box-shadow: var(--shadow);
+        padding: 28px;
+        display: grid;
+        gap: 18px;
+      }
+      .card-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .pill-row {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .pill {
+        background: #1b1f2b;
+        border: 1px solid var(--card-border);
+        border-radius: 999px;
+        padding: 8px 12px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      h1,
+      h2,
+      h3 {
+        margin: 0;
+      }
+      h1 {
+        font-size: 24px;
+        letter-spacing: -0.02em;
+      }
+      h2 {
+        font-size: 18px;
+        color: var(--muted);
+        font-weight: 500;
+      }
+      .qa {
+        display: grid;
+        gap: 10px;
+      }
+      .question {
+        font-size: 20px;
+        font-weight: 600;
+      }
+      .answer {
+        font-size: 16px;
+        color: var(--muted);
+      }
+      .controls {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 12px;
+      }
+      .rate {
+        display: flex;
+        gap: 6px;
+      }
+      .rate-btn {
+        border: none;
+        background: #181c26;
+        color: var(--text);
+        border-radius: 10px;
+        padding: 8px 10px;
+        cursor: pointer;
+        transition: transform 120ms ease, background 120ms ease;
+        font-size: 16px;
+      }
+      .rate-btn.selected {
+        background: #232b39;
+        color: var(--accent);
+      }
+      .rate-btn.up.selected {
+        box-shadow: 0 0 30px rgba(72, 255, 147, 0.5);
+      }
+      .rate-btn.down.selected {
+        box-shadow: 0 0 30px rgba(255, 87, 87, 0.5);
+      }
+      .rate-btn:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+      .category-btn {
+        border-radius: 12px;
+        border: 1px solid var(--card-border);
+        background: #181c26;
+        padding: 12px 14px;
+        color: var(--text);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+      }
+      .category-btn:hover {
+        transform: translateY(-1px);
+        border-color: var(--accent);
+      }
+      .category-btn.selected {
+        background: linear-gradient(135deg, #232b39, #1b2130);
+        border-color: var(--accent);
+        box-shadow: 0 10px 30px rgba(215, 255, 84, 0.12);
+        color: var(--accent);
+      }
+      .status {
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .stacked {
+        display: grid;
+        gap: 8px;
+      }
+      @media (max-width: 640px) {
+        header {
+          padding: 14px 16px;
+        }
+        main {
+          padding: 16px;
+        }
+        .card {
+          padding: 20px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="bar">
+        <div class="bar-left">
+          <h1>Flashcards</h1>
+          <select id="deckSelect" aria-label="Deck selector"></select>
+          <span id="progress" class="status"></span>
+        </div>
+        <div class="bar-right">
+          <div id="userArea"></div>
+          <a href="/admin.html" class="pill" style="text-decoration: none; border-radius: 10px; padding: 8px 12px;">Admin</a>
+        </div>
+      </div>
+    </header>
+    <main>
+      <div class="card" id="card">
+        <div class="card-top">
+          <div class="pill-row" id="pillRow"></div>
+          <div class="rate">
+            <button id="ratingUp" title="Thumbs up" class="rate-btn up">👍</button>
+            <button id="ratingDown" title="Thumbs down" class="rate-btn down">👎</button>
+          </div>
+        </div>
+        <div class="qa">
+          <div class="question" id="question">Loading…</div>
+          <div class="answer" id="answer"></div>
+        </div>
+        <div class="stacked">
+          <!-- <h2>How well did you do?</h2> -->
+          <div class="controls" id="controls"></div>
+          <div class="status" id="status"></div>
+        </div>
+        <div class="stacked" id="navRow">
+          <div class="controls">
+            <button id="prevBtn">Previous</button>
+            <button id="nextBtn" class="cta">Next</button>
+          </div>
+        </div>
+      </div>
+    </main>
+    <div class="auth-panel" id="authPanel">
+      <div class="auth-card">
+        <h2 id="authTitle">Login</h2>
+        <label>Email</label>
+        <input id="authEmail" type="email" autocomplete="email" />
+        <label>Password</label>
+        <input id="authPassword" type="password" autocomplete="current-password" />
+        <div id="nameRow">
+          <label>Name</label>
+          <input id="authName" type="text" autocomplete="name" />
+        </div>
+        <div class="auth-actions">
+          <button id="authSubmit" class="cta" type="button">Submit</button>
+          <button id="authSwitch" class="linkish" type="button">Switch</button>
+          <button id="authCancel" class="linkish" type="button">Cancel</button>
+        </div>
+        <div class="status" id="authStatus"></div>
+      </div>
+    </div>
+    <script>
+      const deckSelect = document.getElementById("deckSelect");
+      const questionEl = document.getElementById("question");
+      const answerEl = document.getElementById("answer");
+      const revealBtn = document.createElement("button");
+      revealBtn.textContent = "Reveal answer";
+      revealBtn.className = "cta";
+      revealBtn.style.width = "fit-content";
+      revealBtn.onclick = () => reveal();
+      const progressEl = document.getElementById("progress");
+      const statusEl = document.getElementById("status");
+      const pillRow = document.getElementById("pillRow");
+      const controls = document.getElementById("controls");
+      const navRow = document.getElementById("navRow");
+      const prevBtn = document.getElementById("prevBtn");
+      const nextBtn = document.getElementById("nextBtn");
+      const ratingUp = document.getElementById("ratingUp");
+      const ratingDown = document.getElementById("ratingDown");
+      const userArea = document.getElementById("userArea");
+      const authPanel = document.getElementById("authPanel");
+      const authTitle = document.getElementById("authTitle");
+      const authEmail = document.getElementById("authEmail");
+      const authPassword = document.getElementById("authPassword");
+      const authName = document.getElementById("authName");
+      const nameRow = document.getElementById("nameRow");
+      const authSubmit = document.getElementById("authSubmit");
+      const authSwitch = document.getElementById("authSwitch");
+      const authCancel = document.getElementById("authCancel");
+      const authStatus = document.getElementById("authStatus");
+
+      let deck = null;
+      let cards = [];
+      let index = 0;
+      let categories = [];
+      let progressMap = {};
+      let showAnswer = false;
+      let images = {};
+      let ratings = {};
+      let currentUser = null;
+      let authMode = "login";
+
+      init();
+
+      async function init() {
+        // Bind UI handlers first so they work even if we bail early for auth.
+        prevBtn.addEventListener("click", () => move(-1));
+        nextBtn.addEventListener("click", () => move(1));
+        ratingUp.addEventListener("click", () => selectRating("up"));
+        ratingDown.addEventListener("click", () => selectRating("down"));
+        authSubmit.onclick = submitAuth;
+        authSwitch.onclick = switchAuthMode;
+        authCancel.onclick = closeAuth;
+        await loadMe();
+        renderUserArea();
+        if (!currentUser) {
+          showAuthPrompt();
+          return;
+        }
+        await loadDecks();
+      }
+
+      async function loadDecks() {
+        const res = await fetch("/api/decks");
+        if (!res.ok) {
+          showAuthPrompt();
+          return;
+        }
+        const data = await res.json();
+        deckSelect.innerHTML = "";
+        data.decks.forEach((d, i) => {
+          const opt = document.createElement("option");
+          opt.value = d.id;
+          opt.textContent = d.title;
+          if (i === 0) opt.selected = true;
+          deckSelect.appendChild(opt);
+        });
+        deckSelect.onchange = () => loadDeck(deckSelect.value);
+        if (data.decks[0]) await loadDeck(data.decks[0].id);
+      }
+
+      async function loadDeck(id) {
+        const res = await fetch(`/api/decks/${id}`);
+        const data = await res.json();
+        deck = data;
+        cards = shuffle(data.cards);
+        categories = data.categories;
+        progressMap = data.progress || {};
+        images = {};
+        ratings = data.ratings || {};
+        cards.forEach((c) => {
+          if (c.image) images[String(c.id)] = c.image;
+        });
+        index = 0;
+        renderCategories();
+        renderCard();
+      }
+
+      function renderCategories() {
+        controls.innerHTML = "";
+        categories.forEach((cat) => {
+          const btn = document.createElement("button");
+          btn.className = "category-btn";
+          btn.textContent = cat;
+          btn.onclick = () => selectCategory(cat);
+          controls.appendChild(btn);
+        });
+      }
+
+      function renderCard() {
+        if (!cards[index]) {
+          questionEl.textContent = "No cards.";
+          answerEl.textContent = "";
+          return;
+        }
+        const card = cards[index];
+        questionEl.textContent = card.question;
+        answerEl.textContent = showAnswer ? card.answer : "";
+        progressEl.textContent = `Card ${index + 1} of ${cards.length}`;
+        const current = progressMap[String(card.id)];
+        statusEl.textContent = current ? `Previously: ${current}` : "Not yet rated";
+        [...controls.children].forEach((btn) => {
+          btn.classList.toggle("selected", btn.textContent === current);
+        });
+        renderRating();
+        renderPills();
+        if (!answerEl.previousSibling || answerEl.previousSibling !== revealBtn) {
+          answerEl.parentNode.insertBefore(revealBtn, answerEl);
+        }
+        revealBtn.style.display = showAnswer ? "none" : "inline-block";
+        renderImage(card);
+      }
+
+      function renderPills() {
+        pillRow.innerHTML = "";
+        const summary = countCategories();
+        categories.forEach((cat) => {
+          const pill = document.createElement("div");
+          pill.className = "pill";
+          pill.textContent = `${cat}: ${summary[cat] || 0}`;
+          pillRow.appendChild(pill);
+        });
+      }
+
+      function countCategories() {
+        const counts = {};
+        Object.values(progressMap).forEach((cat) => {
+          counts[cat] = (counts[cat] || 0) + 1;
+        });
+        return counts;
+      }
+
+      function move(step) {
+        index = (index + step + cards.length) % cards.length;
+        showAnswer = false;
+        renderCard();
+      }
+
+      async function selectCategory(cat) {
+        const card = cards[index];
+        const key = String(card.id);
+        progressMap[key] = cat;
+        move(1);
+        await fetch(`/api/decks/${deck.id}/progress`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cardId: card.id, category: cat }),
+        });
+      }
+
+      function reveal() {
+        showAnswer = true;
+        renderCard();
+      }
+
+      function shuffle(list) {
+        const arr = [...list];
+        for (let i = arr.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        return arr;
+      }
+
+      function renderImage(card) {
+        const key = String(card.id);
+        let img = document.getElementById("card-image");
+        if (img) img.remove();
+        const url = images[key];
+        if (!url) return;
+        img = document.createElement("img");
+        img.id = "card-image";
+        img.src = url;
+        img.alt = "Card image";
+        img.style.maxWidth = "700px";
+        img.style.width = "100%";
+        img.style.borderRadius = "12px";
+        img.style.border = "1px solid var(--card-border)";
+        img.style.marginTop = "6px";
+        img.style.marginLeft = "auto";
+        img.style.marginRight = "auto";
+        img.style.display = "block";
+        answerEl.parentNode.insertBefore(img, answerEl.nextSibling);
+      }
+
+      function renderRating() {
+        const card = cards[index];
+        const key = String(card.id);
+        const current = ratings[key];
+        ratingUp.classList.toggle("selected", current === "up");
+        ratingDown.classList.toggle("selected", current === "down");
+      }
+
+      async function selectRating(choice) {
+        const card = cards[index];
+        const key = String(card.id);
+        const newRating = ratings[key] === choice ? null : choice;
+        ratings[key] = newRating;
+        renderRating();
+        await fetch(`/api/decks/${deck.id}/rating`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cardId: card.id, rating: newRating }),
+        });
+      }
+
+      async function loadMe() {
+        const res = await fetch("/api/me");
+        if (!res.ok) {
+          currentUser = null;
+          return;
+        }
+        const data = await res.json();
+        currentUser = data.user;
+      }
+
+      function renderUserArea() {
+        userArea.innerHTML = "";
+        if (!currentUser) {
+          const loginBtn = document.createElement("button");
+          loginBtn.textContent = "Login";
+          loginBtn.className = "auth-btn";
+          loginBtn.onclick = () => openAuth("login");
+          const regBtn = document.createElement("button");
+          regBtn.textContent = "Sign up";
+          regBtn.className = "auth-btn";
+          regBtn.onclick = () => openAuth("register");
+          userArea.appendChild(loginBtn);
+          userArea.appendChild(regBtn);
+        } else {
+          const avatar = document.createElement("div");
+          avatar.className = "avatar";
+          avatar.textContent = initials(currentUser.name || currentUser.email);
+          avatar.title = `${currentUser.name} (${currentUser.email})`;
+          const logoutBtn = document.createElement("button");
+          logoutBtn.className = "auth-btn";
+          logoutBtn.textContent = "Logout";
+          logoutBtn.onclick = logout;
+          userArea.appendChild(avatar);
+          userArea.appendChild(logoutBtn);
+        }
+      }
+
+      function openAuth(mode) {
+        authMode = mode;
+        authTitle.textContent = mode === "login" ? "Login" : "Create account";
+        nameRow.style.display = mode === "login" ? "none" : "block";
+        authStatus.textContent = "";
+        authEmail.value = "";
+        authPassword.value = "";
+        authName.value = "";
+        authPanel.style.display = "flex";
+      }
+
+      function closeAuth() {
+        authPanel.style.display = "none";
+      }
+
+      function switchAuthMode() {
+        openAuth(authMode === "login" ? "register" : "login");
+      }
+
+      async function submitAuth() {
+        authStatus.textContent = "";
+        const email = authEmail.value.trim();
+        const password = authPassword.value;
+        const name = authName.value.trim();
+        if (!email || !password || (authMode === "register" && !name)) {
+          authStatus.textContent = "Please fill all fields.";
+          return;
+        }
+        const payload = authMode === "login" ? { email, password } : { email, password, name };
+        const res = await fetch(authMode === "login" ? "/api/auth/login" : "/api/auth/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          authStatus.textContent = err.error || "Auth failed";
+          return;
+        }
+        const data = await res.json();
+        currentUser = data.user;
+        closeAuth();
+        renderUserArea();
+        await loadDecks();
+        if (!cards.length) showAuthPrompt();
+      }
+
+      async function logout() {
+        await fetch("/api/auth/logout", { method: "POST" });
+        currentUser = null;
+        ratings = {};
+        progressMap = {};
+        renderUserArea();
+        showAuthPrompt();
+      }
+
+      function showAuthPrompt() {
+        questionEl.textContent = "Please log in to view decks.";
+        answerEl.textContent = "";
+        pillRow.innerHTML = "";
+        controls.innerHTML = "";
+        progressEl.textContent = "";
+        ratingUp.classList.remove("selected");
+        ratingDown.classList.remove("selected");
+      }
+
+      function initials(str) {
+        const parts = str.split(/\s+/).filter(Boolean);
+        if (!parts.length) return "?";
+        if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+        return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+      }
+    </script>
+  </body>
+</html>

@@ -3,286 +3,165 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Flashcards</title>
+    <title>Flashcards • New Session</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet" />
-    <style>
-      :root {
-        --bg: #0c0c10;
-        --panel: #12141c;
-        --accent: #d7ff54;
-        --muted: #9aa3b5;
-        --text: #eef2ff;
-        --card: #141824;
-        --card-border: #1f2330;
-        --shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
-      }
-      * {
-        box-sizing: border-box;
-      }
-      body {
-        margin: 0;
-        font-family: "Space Grotesk", "Inter", system-ui, -apple-system, sans-serif;
-        background: radial-gradient(circle at 20% 20%, rgba(215, 255, 84, 0.08), transparent 25%),
-          radial-gradient(circle at 80% 0%, rgba(78, 117, 255, 0.08), transparent 25%),
-          var(--bg);
-        color: var(--text);
-        min-height: 100vh;
-        display: flex;
-        flex-direction: column;
-      }
-      header {
-        padding: 18px 28px;
-        border-bottom: 1px solid #1c1f2a;
-        background: rgba(12, 12, 16, 0.8);
-        backdrop-filter: blur(12px);
-        position: sticky;
-        top: 0;
-        z-index: 2;
-      }
-      .bar {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        flex-wrap: wrap;
-        justify-content: space-between;
-        position: sticky;
-        top: 0;
-        z-index: 5;
-        background: rgba(12, 12, 16, 0.9);
-        backdrop-filter: blur(10px);
-      }
-      .bar-left {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        flex-wrap: wrap;
-      }
-      .bar-right {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-      select,
-      button {
-        background: var(--card);
-        color: var(--text);
-        border: 1px solid var(--card-border);
-        border-radius: 10px;
-        padding: 10px 14px;
-        font-size: 14px;
-      }
-      select:focus,
-      button:focus-visible {
-        outline: 2px solid var(--accent);
-        outline-offset: 2px;
-      }
-      button.cta {
-        background: var(--accent);
-        color: #0b0b0e;
-        border-color: transparent;
-        font-weight: 700;
-        letter-spacing: 0.01em;
-      }
-      main {
-        flex: 1;
-        display: grid;
-        place-items: center;
-        padding: 32px;
-      }
-      .card {
-        width: min(900px, 100%);
-        background: var(--card);
-        border: 1px solid var(--card-border);
-        border-radius: 18px;
-        box-shadow: var(--shadow);
-        padding: 28px;
-        display: grid;
-        gap: 18px;
-      }
-      .card-top {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 10px;
-      }
-      .pill-row {
-        display: flex;
-        gap: 10px;
-        flex-wrap: wrap;
-      }
-      .pill {
-        background: #1b1f2b;
-        border: 1px solid var(--card-border);
-        border-radius: 999px;
-        padding: 8px 12px;
-        font-size: 12px;
-        color: var(--muted);
-      }
-      h1,
-      h2,
-      h3 {
-        margin: 0;
-      }
-      h1 {
-        font-size: 24px;
-        letter-spacing: -0.02em;
-      }
-      h2 {
-        font-size: 18px;
-        color: var(--muted);
-        font-weight: 500;
-      }
-      .qa {
-        display: grid;
-        gap: 10px;
-      }
-      .question {
-        font-size: 20px;
-        font-weight: 600;
-      }
-      .answer {
-        font-size: 16px;
-        color: var(--muted);
-      }
-      .controls {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-        gap: 12px;
-      }
-      .rate {
-        display: flex;
-        gap: 6px;
-      }
-      .rate-btn {
-        border: none;
-        background: #181c26;
-        color: var(--text);
-        border-radius: 10px;
-        padding: 8px 10px;
-        cursor: pointer;
-        transition: transform 120ms ease, background 120ms ease;
-        font-size: 16px;
-      }
-      .rate-btn.selected {
-        background: #232b39;
-        color: var(--accent);
-      }
-      .rate-btn.up.selected {
-        box-shadow: 0 0 30px rgba(72, 255, 147, 0.5);
-      }
-      .rate-btn.down.selected {
-        box-shadow: 0 0 30px rgba(255, 87, 87, 0.5);
-      }
-      .rate-btn:focus-visible {
-        outline: 2px solid var(--accent);
-        outline-offset: 2px;
-      }
-      .category-btn {
-        border-radius: 12px;
-        border: 1px solid var(--card-border);
-        background: #181c26;
-        padding: 12px 14px;
-        color: var(--text);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
-      }
-      .category-btn:hover {
-        transform: translateY(-1px);
-        border-color: var(--accent);
-      }
-      .category-btn.selected {
-        background: linear-gradient(135deg, #232b39, #1b2130);
-        border-color: var(--accent);
-        box-shadow: 0 10px 30px rgba(215, 255, 84, 0.12);
-        color: var(--accent);
-      }
-      .status {
-        color: var(--muted);
-        font-size: 13px;
-      }
-      .stacked {
-        display: grid;
-        gap: 8px;
-      }
-      @media (max-width: 640px) {
-        header {
-          padding: 14px 16px;
-        }
-        main {
-          padding: 16px;
-        }
-        .card {
-          padding: 20px;
-        }
-      }
-    </style>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;600;700&family=Noto+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles/new-common.css" />
+    <link rel="stylesheet" href="/styles/index-new.css" />
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
   </head>
   <body>
+    <div class="glow" aria-hidden="true"></div>
     <header>
-      <div class="bar">
-        <div class="bar-left">
-          <h1>Flashcards</h1>
-          <select id="deckSelect" aria-label="Deck selector"></select>
-          <span id="progress" class="status"></span>
+      <div class="topbar">
+        <div class="brand">
+          <div class="logo">PP</div>
+          <div>
+            <div class="brand-name">Paramedic Prep</div>
+            <!-- <div class="brand-sub">Adaptive learning deck</div> -->
+          </div>
         </div>
-        <div class="bar-right">
-          <a href="/admin.html" class="pill" style="text-decoration: none; border-radius: 10px; padding: 8px 12px;">Admin</a>
+        <div class="select-block">
+          <!-- <label for="deckSelect">Current lesson</label> -->
+          <div class="select-wrap">
+            <select id="deckSelect" aria-label="Deck selector"></select>
+            <span class="chevron">▾</span>
+          </div>
+        </div>
+        <div class="top-right">
+          <div class="pill" id="progressShort">0 / 0</div>
+          <div id="userArea" class="user-area"></div>
         </div>
       </div>
     </header>
     <main>
-      <div class="card" id="card">
-        <div class="card-top">
-          <div class="pill-row" id="pillRow"></div>
-          <div class="rate">
-            <button id="ratingUp" title="Thumbs up" class="rate-btn up">👍</button>
-            <button id="ratingDown" title="Thumbs down" class="rate-btn down">👎</button>
+      <div class="layout">
+        <section class="session">
+          <div class="session-head">
+            <div class="session-title">
+              <h2>Session Progress</h2>
+              <span class="muted" id="sessionMeta">Loading...</span>
+            </div>
+            <div class="pill-stack" id="pillRow"></div>
           </div>
-        </div>
-        <div class="qa">
-          <div class="question" id="question">Loading…</div>
-          <div class="answer" id="answer"></div>
-        </div>
-        <div class="stacked">
-          <!-- <h2>How well did you do?</h2> -->
-          <div class="controls" id="controls"></div>
-          <div class="status" id="status"></div>
-        </div>
-        <div class="stacked" id="navRow">
-          <div class="controls">
-            <button id="prevBtn">Previous</button>
-            <button id="nextBtn" class="cta">Next</button>
+          <div class="progress-bar">
+            <div class="progress-fill" id="progressFill"></div>
           </div>
-        </div>
+          <div class="cards-grid">
+            <article class="card">
+              <div class="card-header">
+                <span class="" id="deckBadge"></span>
+                <div class="rating">
+                  <button id="ratingUp" class="rate-btn" title="Thumbs up">👍</button>
+                  <button id="ratingDown" class="rate-btn" title="Thumbs down">👎</button>
+                </div>
+              </div>
+              <div id="imageFrame"></div>
+              <div class="card-title" id="question">Loading…</div>
+              <div class="status-row">
+                <span class="muted" id="status">Stay focused</span>
+              </div>
+            </article>
+            <article class="card answer-card">
+              <div class="answer-title">
+                <span>Answer</span>
+                <button id="revealBtn" class="reveal-btn" type="button">Reveal (Space)</button>
+              </div>
+              <div class="answer-text" id="answer"></div>
+              <div class="status-row muted" id="cardStats"></div>
+            </article>
+          </div>
+          <div class="category-row" id="controls"></div>
+          <div class="nav-row">
+            <div class="rating muted" id="progress"></div>
+            <div class="rating">
+              <button class="btn" id="prevBtn" type="button">Previous</button>
+              <button class="btn primary" id="nextBtn" type="button">Next</button>
+            </div>
+          </div>
+        </section>
+        <div id="emptyState" class="empty-state" style="display: none;">Please log in to view decks.</div>
       </div>
     </main>
+
+    <div class="report-overlay" id="reportPanel" aria-hidden="true">
+      <div class="report-card">
+        <div class="report-head">
+          <div>
+            <div class="eyebrow">Profile</div>
+            <h3>Lesson reports</h3>
+            <div class="muted" id="reportSubtitle">Loading your progress...</div>
+          </div>
+          <div class="report-actions">
+            <div class="report-legend" id="reportLegend"></div>
+            <button class="btn" id="reportClose" type="button">Close</button>
+          </div>
+        </div>
+        <div class="report-grid" id="reportGrid"></div>
+      </div>
+    </div>
+
+    <div class="auth-panel" id="authPanel">
+      <div class="auth-card">
+        <h2 id="authTitle">Login</h2>
+        <label for="authEmail">Email</label>
+        <input id="authEmail" type="email" autocomplete="email" />
+        <label for="authPassword">Password</label>
+        <input id="authPassword" type="password" autocomplete="current-password" />
+        <div id="nameRow">
+          <label for="authName">Name</label>
+          <input id="authName" type="text" autocomplete="name" />
+        </div>
+        <div class="auth-actions">
+          <button id="authSubmit" class="btn primary" type="button">Submit</button>
+          <button id="authCancel" class="linkish" type="button">Cancel</button>
+        </div>
+        <div class="muted" id="authStatus"></div>
+      </div>
+    </div>
+
     <script>
       const deckSelect = document.getElementById("deckSelect");
       const questionEl = document.getElementById("question");
       const answerEl = document.getElementById("answer");
-      const revealBtn = document.createElement("button");
-      revealBtn.textContent = "Reveal answer";
-      revealBtn.className = "cta";
-      revealBtn.style.width = "fit-content";
-      revealBtn.onclick = () => reveal();
       const progressEl = document.getElementById("progress");
+      const progressShortEl = document.getElementById("progressShort");
       const statusEl = document.getElementById("status");
+      const cardStatsEl = document.getElementById("cardStats");
       const pillRow = document.getElementById("pillRow");
       const controls = document.getElementById("controls");
-      const navRow = document.getElementById("navRow");
       const prevBtn = document.getElementById("prevBtn");
       const nextBtn = document.getElementById("nextBtn");
       const ratingUp = document.getElementById("ratingUp");
       const ratingDown = document.getElementById("ratingDown");
+      const userArea = document.getElementById("userArea");
+      const authPanel = document.getElementById("authPanel");
+      const authTitle = document.getElementById("authTitle");
+      const authEmail = document.getElementById("authEmail");
+      const authPassword = document.getElementById("authPassword");
+      const authName = document.getElementById("authName");
+      const nameRow = document.getElementById("nameRow");
+      const authSubmit = document.getElementById("authSubmit");
+      const authCancel = document.getElementById("authCancel");
+      const authStatus = document.getElementById("authStatus");
+      const revealBtn = document.getElementById("revealBtn");
+      const deckBadge = document.getElementById("deckBadge");
+      const progressFill = document.getElementById("progressFill");
+      const sessionMeta = document.getElementById("sessionMeta");
+      const imageFrame = document.getElementById("imageFrame");
+      const emptyState = document.getElementById("emptyState");
+      const reportPanel = document.getElementById("reportPanel");
+      const reportGrid = document.getElementById("reportGrid");
+      const reportSubtitle = document.getElementById("reportSubtitle");
+      const reportClose = document.getElementById("reportClose");
+      const reportLegend = document.getElementById("reportLegend");
 
       let deck = null;
+      let allCards = [];
       let cards = [];
       let index = 0;
       let categories = [];
@@ -290,19 +169,41 @@
       let showAnswer = false;
       let images = {};
       let ratings = {};
+      let activeFilters = new Set();
+      let currentUser = null;
+      let authMode = "login";
+      let reportData = [];
 
       init();
 
       async function init() {
-        await loadDecks();
         prevBtn.addEventListener("click", () => move(-1));
         nextBtn.addEventListener("click", () => move(1));
         ratingUp.addEventListener("click", () => selectRating("up"));
         ratingDown.addEventListener("click", () => selectRating("down"));
+        authSubmit.onclick = submitAuth;
+        authCancel.onclick = closeAuth;
+        revealBtn.onclick = reveal;
+        reportClose.onclick = closeReports;
+        reportPanel.addEventListener("click", (e) => {
+          if (e.target === reportPanel) closeReports();
+        });
+        window.addEventListener("keydown", handleKeys);
+        await loadMe();
+        renderUserArea();
+        if (!currentUser) {
+          showAuthPrompt();
+          return;
+        }
+        await loadDecks();
       }
 
       async function loadDecks() {
         const res = await fetch("/api/decks");
+        if (!res.ok) {
+          showAuthPrompt();
+          return;
+        }
         const data = await res.json();
         deckSelect.innerHTML = "";
         data.decks.forEach((d, i) => {
@@ -319,8 +220,10 @@
       async function loadDeck(id) {
         const res = await fetch(`/api/decks/${id}`);
         const data = await res.json();
+        emptyState.style.display = "none";
         deck = data;
-        cards = shuffle(data.cards);
+        allCards = shuffle(data.cards);
+        cards = [...allCards];
         categories = data.categories;
         progressMap = data.progress || {};
         images = {};
@@ -329,6 +232,7 @@
           if (c.image) images[String(c.id)] = c.image;
         });
         index = 0;
+        activeFilters = new Set();
         renderCategories();
         renderCard();
       }
@@ -338,43 +242,79 @@
         categories.forEach((cat) => {
           const btn = document.createElement("button");
           btn.className = "category-btn";
-          btn.textContent = cat;
+          btn.innerHTML = `<span>${cat}</span><span class="category-meta">Move card to ${cat}</span>`;
           btn.onclick = () => selectCategory(cat);
+          btn.dataset.cat = cat.toLowerCase();
+          btn.dataset.name = cat;
           controls.appendChild(btn);
+        });
+        decorateCategoryColors();
+      }
+
+      function decorateCategoryColors() {
+        controls.querySelectorAll(".category-btn").forEach((btn) => {
+          const cat = btn.dataset.cat || "";
+          let color = "var(--accent)";
+          if (cat.includes("again")) color = "var(--again)";
+          if (cat.includes("hard")) color = "var(--hard)";
+          if (cat.includes("good")) color = "var(--good)";
+          if (cat.includes("easy")) color = "var(--accent-2)";
+          btn.style.borderColor = color + "55";
+          btn.style.color = "#e9f1ff";
         });
       }
 
       function renderCard() {
-        if (!cards[index]) {
-          questionEl.textContent = "No cards.";
+        renderPills();
+        renderProgress();
+        if (!cards.length) {
+          questionEl.textContent = activeFilters.size ? "No cards match the selected difficulties." : "No cards.";
           answerEl.textContent = "";
+          statusEl.textContent = activeFilters.size ? "Clear or change filters to continue." : "";
+          cardStatsEl.textContent = "";
+          imageFrame.innerHTML = "";
+          ratingUp.classList.remove("selected");
+          ratingDown.classList.remove("selected");
           return;
         }
+        if (!cards[index]) index = 0;
         const card = cards[index];
         questionEl.textContent = card.question;
-        answerEl.textContent = showAnswer ? card.answer : "";
-        progressEl.textContent = `Card ${index + 1} of ${cards.length}`;
+        answerEl.textContent = showAnswer ? card.answer : "Press reveal to view the answer.";
         const current = progressMap[String(card.id)];
-        statusEl.textContent = current ? `Previously: ${current}` : "Not yet rated";
+        statusEl.textContent = current ? `You marked this as ${current}` : "Not yet rated";
         [...controls.children].forEach((btn) => {
-          btn.classList.toggle("selected", btn.textContent === current);
+          btn.classList.toggle("selected", btn.dataset.name === current);
         });
         renderRating();
-        renderPills();
-        if (!answerEl.previousSibling || answerEl.previousSibling !== revealBtn) {
-          answerEl.parentNode.insertBefore(revealBtn, answerEl);
-        }
-        revealBtn.style.display = showAnswer ? "none" : "inline-block";
         renderImage(card);
+        // deckBadge.textContent = deck.title || "Deck";
+        // cardStatsEl.textContent = `Card ${index + 1} of ${cards.length}`;
+      }
+
+      function renderProgress() {
+        const total = cards.length;
+        const visibleIds = new Set(cards.map((c) => String(c.id)));
+        const done = Object.entries(progressMap).filter(([id]) => visibleIds.has(id)).length;
+        const pct = total ? Math.round((done / total) * 100) : 0;
+        const slide = `${cards.length ? index + 1 : 0} / ${total || 0}`;
+        progressEl.textContent = slide;
+        progressShortEl.textContent = `${done} / ${total || 0}`;
+        progressFill.style.width = `${pct}%`;
+        sessionMeta.textContent = `${pct}% complete · ${done} of ${total} reviewed`;
       }
 
       function renderPills() {
         pillRow.innerHTML = "";
         const summary = countCategories();
         categories.forEach((cat) => {
-          const pill = document.createElement("div");
-          pill.className = "pill";
+          const pill = document.createElement("button");
+          pill.type = "button";
+          pill.className = "pill-small filter-pill";
           pill.textContent = `${cat}: ${summary[cat] || 0}`;
+          pill.dataset.cat = cat;
+          pill.classList.toggle("selected", activeFilters.has(cat));
+          pill.onclick = () => toggleFilter(cat);
           pillRow.appendChild(pill);
         });
       }
@@ -388,21 +328,51 @@
       }
 
       function move(step) {
+        if (!cards.length) return;
         index = (index + step + cards.length) % cards.length;
         showAnswer = false;
         renderCard();
       }
 
+      function toggleFilter(cat) {
+        if (activeFilters.has(cat)) {
+          activeFilters.delete(cat);
+        } else {
+          activeFilters.add(cat);
+        }
+        applyFilters({ preserveIndex: true });
+      }
+
+      function applyFilters({ preserveIndex } = {}) {
+        const currentId = preserveIndex && cards[index] ? cards[index].id : null;
+        if (!activeFilters.size) {
+          cards = [...allCards];
+        } else {
+          const selected = activeFilters;
+          cards = allCards.filter((card) => selected.has(progressMap[String(card.id)]));
+        }
+        if (currentId) {
+          const foundIndex = cards.findIndex((c) => c.id === currentId);
+          index = foundIndex >= 0 ? foundIndex : 0;
+        } else {
+          index = 0;
+        }
+        showAnswer = false;
+        renderCard();
+      }
+
       async function selectCategory(cat) {
+        if (!cards[index]) return;
         const card = cards[index];
         const key = String(card.id);
         progressMap[key] = cat;
-        move(1);
+        applyFilters({ preserveIndex: true });
         await fetch(`/api/decks/${deck.id}/progress`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ cardId: card.id, category: cat }),
         });
+        move(1);
       }
 
       function reveal() {
@@ -421,26 +391,24 @@
 
       function renderImage(card) {
         const key = String(card.id);
-        let img = document.getElementById("card-image");
-        if (img) img.remove();
         const url = images[key];
-        if (!url) return;
-        img = document.createElement("img");
-        img.id = "card-image";
+        imageFrame.innerHTML = "";
+        if (!url) {
+          const placeholder = document.createElement("div");
+          placeholder.className = "empty-img";
+          placeholder.textContent = "No media attached for this card.";
+          // imageFrame.appendChild(placeholder);
+          return;
+        }
+        const img = document.createElement("img");
         img.src = url;
         img.alt = "Card image";
-        img.style.maxWidth = "700px";
-        img.style.width = "100%";
-        img.style.borderRadius = "12px";
-        img.style.border = "1px solid var(--card-border)";
-        img.style.marginTop = "6px";
-        img.style.marginLeft = "auto";
-        img.style.marginRight = "auto";
-        img.style.display = "block";
-        answerEl.parentNode.insertBefore(img, answerEl.nextSibling);
+        img.className = "question-img";
+        imageFrame.appendChild(img);
       }
 
       function renderRating() {
+        if (!cards[index]) return;
         const card = cards[index];
         const key = String(card.id);
         const current = ratings[key];
@@ -449,6 +417,7 @@
       }
 
       async function selectRating(choice) {
+        if (!cards[index]) return;
         const card = cards[index];
         const key = String(card.id);
         const newRating = ratings[key] === choice ? null : choice;
@@ -459,6 +428,297 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ cardId: card.id, rating: newRating }),
         });
+      }
+
+      async function loadMe() {
+        const res = await fetch("/api/me");
+        if (!res.ok) {
+          currentUser = null;
+          return;
+        }
+        const data = await res.json();
+        currentUser = data.user;
+      }
+
+      function renderUserArea() {
+        userArea.innerHTML = "";
+        if (!currentUser) {
+          const loginBtn = document.createElement("button");
+          loginBtn.textContent = "Login";
+          loginBtn.className = "btn";
+          loginBtn.onclick = () => openAuth("login");
+          const regBtn = document.createElement("button");
+          regBtn.textContent = "Sign up";
+          regBtn.className = "btn primary";
+          regBtn.onclick = () => openAuth("register");
+          userArea.appendChild(loginBtn);
+          userArea.appendChild(regBtn);
+        } else {
+          const avatar = document.createElement("div");
+          avatar.className = "avatar";
+          avatar.textContent = initials(currentUser.name || currentUser.email);
+          avatar.title = `${currentUser.name} (${currentUser.email})`;
+          avatar.style.cursor = "pointer";
+          avatar.onclick = openReports;
+          const reportBtn = document.createElement("button");
+          reportBtn.className = "btn ghost";
+          reportBtn.textContent = "Reports";
+          reportBtn.onclick = openReports;
+          if (currentUser.is_admin) {
+            const adminBtn = document.createElement("a");
+            adminBtn.className = "btn";
+            adminBtn.textContent = "Admin";
+            adminBtn.href = "/admin.html";
+            userArea.appendChild(adminBtn);
+          }
+          userArea.appendChild(reportBtn);
+          const logoutBtn = document.createElement("button");
+          logoutBtn.className = "btn";
+          logoutBtn.textContent = "Logout";
+          logoutBtn.onclick = logout;
+          userArea.appendChild(avatar);
+          userArea.appendChild(logoutBtn);
+        }
+      }
+
+      function openAuth(mode) {
+        authMode = mode;
+        authTitle.textContent = mode === "login" ? "Login" : "Create account";
+        nameRow.style.display = mode === "login" ? "none" : "block";
+        authStatus.textContent = "";
+        authEmail.value = "";
+        authPassword.value = "";
+        authName.value = "";
+        authPanel.style.display = "flex";
+      }
+
+      function closeAuth() {
+        authPanel.style.display = "none";
+      }
+
+      function switchAuthMode() {
+        openAuth(authMode === "login" ? "register" : "login");
+      }
+
+      async function submitAuth() {
+        authStatus.textContent = "";
+        const email = authEmail.value.trim();
+        const password = authPassword.value;
+        const name = authName.value.trim();
+        if (!email || !password || (authMode === "register" && !name)) {
+          authStatus.textContent = "Please fill all fields.";
+          return;
+        }
+        const payload = authMode === "login" ? { email, password } : { email, password, name };
+        const res = await fetch(authMode === "login" ? "/api/auth/login" : "/api/auth/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          authStatus.textContent = err.error || "Auth failed";
+          return;
+        }
+        const data = await res.json();
+        currentUser = data.user;
+        closeAuth();
+        renderUserArea();
+        await loadDecks();
+        if (!cards.length) showAuthPrompt();
+      }
+
+      async function logout() {
+        await fetch("/api/auth/logout", { method: "POST" });
+        currentUser = null;
+        ratings = {};
+        progressMap = {};
+        renderUserArea();
+        showAuthPrompt();
+      }
+
+      function showAuthPrompt() {
+        questionEl.textContent = "Please log in to view decks.";
+        answerEl.textContent = "";
+        pillRow.innerHTML = "";
+        controls.innerHTML = "";
+        controls.appendChild(createLoginButtons());
+        progressEl.textContent = "";
+        ratingUp.classList.remove("selected");
+        ratingDown.classList.remove("selected");
+        progressFill.style.width = "0%";
+        sessionMeta.textContent = "Authentication required to load study decks.";
+        emptyState.style.display = "block";
+        renderUserArea();
+      }
+
+      function createLoginButtons() {
+        const wrapper = document.createElement("div");
+        wrapper.className = "row";
+        const loginBtn = document.createElement("button");
+        loginBtn.textContent = "Login";
+        loginBtn.className = "btn";
+        loginBtn.onclick = () => openAuth("login");
+        const regBtn = document.createElement("button");
+        regBtn.textContent = "Sign up";
+        regBtn.className = "btn primary";
+        regBtn.onclick = () => openAuth("register");
+        wrapper.appendChild(loginBtn);
+        wrapper.appendChild(regBtn);
+        return wrapper;
+      }
+
+      async function openReports() {
+        if (!currentUser) return;
+        reportPanel.classList.add("open");
+        reportPanel.setAttribute("aria-hidden", "false");
+        await loadReports();
+      }
+
+      function closeReports() {
+        reportPanel.classList.remove("open");
+        reportPanel.setAttribute("aria-hidden", "true");
+      }
+
+      async function loadReports() {
+        reportSubtitle.textContent = "Loading your progress...";
+        reportGrid.innerHTML = "";
+        renderLegend();
+        const res = await fetch("/api/reports/progress");
+        if (!res.ok) {
+          reportSubtitle.textContent = "Unable to load reports right now.";
+          return;
+        }
+        const data = await res.json();
+        reportData = data.decks || [];
+        renderReportGrid(reportData);
+      }
+
+      function renderReportGrid(decks) {
+        if (!decks.length) {
+          reportSubtitle.textContent = "No study activity yet. Answer a few cards to see insights.";
+          reportGrid.innerHTML = "";
+          return;
+        }
+        const totalAnswered = decks.reduce((sum, d) => sum + (d.answered || 0), 0);
+        const totalCards = decks.reduce((sum, d) => sum + (d.totalCards || 0), 0);
+        reportSubtitle.textContent = `${totalAnswered} of ${totalCards} cards answered across ${decks.length} lessons`;
+        reportGrid.innerHTML = "";
+        decks.forEach((deck) => {
+          const wrapper = document.createElement("div");
+          wrapper.className = "report-item";
+
+          const row = document.createElement("div");
+          row.className = "report-row";
+          const left = document.createElement("div");
+          left.innerHTML = `<div class="eyebrow">Lesson</div><div style="font-weight: 700; font-size: 16px;">${deck.title}</div>`;
+          const pill = document.createElement("div");
+          pill.className = "pill-small";
+          pill.textContent = `${deck.answered} / ${deck.totalCards} answered`;
+          row.appendChild(left);
+          row.appendChild(pill);
+
+          const barHolder = document.createElement("div");
+          barHolder.className = "report-bar";
+          drawStackedBar(barHolder, deck);
+
+          const meta = document.createElement("div");
+          meta.className = "report-meta";
+          const pct = deck.totalCards ? Math.round((deck.answered / deck.totalCards) * 100) : 0;
+          meta.innerHTML = `<span class="report-score">${pct}% complete</span><span>·</span><span>${deck.unanswered} unanswered</span>`;
+
+          wrapper.appendChild(row);
+          wrapper.appendChild(barHolder);
+          wrapper.appendChild(meta);
+          reportGrid.appendChild(wrapper);
+        });
+      }
+
+      function drawStackedBar(container, deck) {
+        const total = deck.totalCards || 1;
+        const data = [
+          { key: "Again", value: deck.categories?.Again || 0, color: getReportColor("Again") },
+          { key: "Hard", value: deck.categories?.Hard || 0, color: getReportColor("Hard") },
+          { key: "Good", value: deck.categories?.Good || 0, color: getReportColor("Good") },
+          { key: "Easy", value: deck.categories?.Easy || 0, color: getReportColor("Easy") },
+          { key: "Unanswered", value: deck.unanswered || 0, color: getReportColor("Unanswered") },
+        ];
+        const width = 100;
+        const height = container.clientHeight || 18;
+        const svg = d3
+          .select(container)
+          .html("")
+          .append("svg")
+          .attr("width", "100%")
+          .attr("height", height)
+          .attr("viewBox", `0 0 ${width} ${height}`)
+          .attr("preserveAspectRatio", "none");
+
+        let x = 0;
+        data.forEach((d) => {
+          if (!d.value) return;
+          const w = (d.value / total) * width;
+          svg
+            .append("rect")
+            .attr("x", x)
+            .attr("y", 0)
+            .attr("width", Math.max(w, 0))
+            .attr("height", height)
+            .attr("fill", d.color);
+          x += w;
+        });
+      }
+
+      function getReportColor(key) {
+        if (key === "Again") return "var(--report-again)";
+        if (key === "Hard") return "var(--report-hard)";
+        if (key === "Good") return "var(--report-good)";
+        if (key === "Easy") return "var(--report-easy)";
+        return "var(--report-unanswered)";
+      }
+
+      function renderLegend() {
+        reportLegend.innerHTML = "";
+        [
+          { key: "Again", label: "Again", color: getReportColor("Again") },
+          { key: "Hard", label: "Hard", color: getReportColor("Hard") },
+          { key: "Good", label: "Good", color: getReportColor("Good") },
+          { key: "Easy", label: "Easy", color: getReportColor("Easy") },
+          { key: "Unanswered", label: "Unanswered", color: getReportColor("Unanswered") },
+        ].forEach((item) => {
+          const chip = document.createElement("div");
+          chip.className = "legend-chip";
+          const swatch = document.createElement("span");
+          swatch.className = "legend-swatch";
+          swatch.style.background = item.color;
+          const text = document.createElement("span");
+          text.textContent = item.label;
+          chip.appendChild(swatch);
+          chip.appendChild(text);
+          reportLegend.appendChild(chip);
+        });
+      }
+
+      function initials(str) {
+        const parts = str.split(/\s+/).filter(Boolean);
+        if (!parts.length) return "?";
+        if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+        return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+      }
+
+      function handleKeys(e) {
+        if (authPanel.style.display === "flex" || reportPanel.classList.contains("open")) {
+          if (e.code === "Escape") closeReports();
+          return;
+        }
+        if (e.code === "ArrowRight") move(1);
+        if (e.code === "ArrowLeft") move(-1);
+        if (e.code === "Space") {
+          e.preventDefault();
+          if (!showAnswer) {
+            reveal();
+          }
+        }
       }
     </script>
   </body>
