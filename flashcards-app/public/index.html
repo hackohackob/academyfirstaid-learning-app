@@ -71,6 +71,7 @@
                 <span>Answer</span>
                 <button id="revealBtn" class="reveal-btn" type="button">Reveal (Space)</button>
               </div>
+              <div id="answerImageFrame" class="answer-media"></div>
               <div class="answer-text" id="answer"></div>
               <div class="status-row muted" id="cardStats"></div>
             </article>
@@ -153,6 +154,7 @@
       const progressFill = document.getElementById("progressFill");
       const sessionMeta = document.getElementById("sessionMeta");
       const imageFrame = document.getElementById("imageFrame");
+      const answerImageFrame = document.getElementById("answerImageFrame");
       const emptyState = document.getElementById("emptyState");
       const reportPanel = document.getElementById("reportPanel");
       const reportGrid = document.getElementById("reportGrid");
@@ -168,6 +170,7 @@
       let progressMap = {};
       let showAnswer = false;
       let images = {};
+      let answerImages = {};
       let ratings = {};
       let activeFilters = new Set();
       let currentUser = null;
@@ -227,9 +230,11 @@
         categories = data.categories;
         progressMap = data.progress || {};
         images = {};
+        answerImages = {};
         ratings = data.ratings || {};
         cards.forEach((c) => {
           if (c.image) images[String(c.id)] = c.image;
+          if (c.answerImage) answerImages[String(c.id)] = c.answerImage;
         });
         index = 0;
         activeFilters = new Set();
@@ -273,6 +278,10 @@
           statusEl.textContent = activeFilters.size ? "Clear or change filters to continue." : "";
           cardStatsEl.textContent = "";
           imageFrame.innerHTML = "";
+          if (answerImageFrame) {
+            answerImageFrame.innerHTML = "";
+            answerImageFrame.style.display = "none";
+          }
           ratingUp.classList.remove("selected");
           ratingDown.classList.remove("selected");
           return;
@@ -287,7 +296,7 @@
           btn.classList.toggle("selected", btn.dataset.name === current);
         });
         renderRating();
-        renderImage(card);
+        renderImages(card);
         // deckBadge.textContent = deck.title || "Deck";
         // cardStatsEl.textContent = `Card ${index + 1} of ${cards.length}`;
       }
@@ -389,22 +398,32 @@
         return arr;
       }
 
-      function renderImage(card) {
+      function renderImages(card) {
         const key = String(card.id);
-        const url = images[key];
-        imageFrame.innerHTML = "";
+        const questionUrl = images[key];
+        const answerUrl = answerImages[key];
+        renderImageInto(imageFrame, questionUrl);
+        if (showAnswer) {
+          renderImageInto(answerImageFrame, answerUrl);
+        } else if (answerImageFrame) {
+          answerImageFrame.innerHTML = "";
+          answerImageFrame.style.display = "none";
+        }
+      }
+
+      function renderImageInto(frame, url) {
+        if (!frame) return;
+        frame.innerHTML = "";
         if (!url) {
-          const placeholder = document.createElement("div");
-          placeholder.className = "empty-img";
-          placeholder.textContent = "No media attached for this card.";
-          // imageFrame.appendChild(placeholder);
+          frame.style.display = "none";
           return;
         }
+        frame.style.display = "block";
         const img = document.createElement("img");
         img.src = url;
         img.alt = "Card image";
         img.className = "question-img";
-        imageFrame.appendChild(img);
+        frame.appendChild(img);
       }
 
       function renderRating() {

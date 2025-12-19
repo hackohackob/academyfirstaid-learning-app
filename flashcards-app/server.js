@@ -86,6 +86,7 @@ function initDb() {
       question TEXT NOT NULL,
       answer TEXT NOT NULL,
       image TEXT,
+      answer_image TEXT,
       UNIQUE(deck_id, question, answer),
       FOREIGN KEY(deck_id) REFERENCES decks(id) ON DELETE CASCADE
     );
@@ -129,6 +130,7 @@ function initDb() {
   migrateProgressRatingsToCardIds();
   migrateProgressHistory();
   migrateDeckIdsToInt();
+  migrateAnswerImages();
   const existingDecks = getDecksFromDb();
   if (existingDecks.length === 0) {
     seedFromCsv();
@@ -152,9 +154,18 @@ function seedFromCsv() {
     if (!deckRow) return;
     const deckDbId = deckRow.id;
     const cards = parseCsvQuestions(path.join(QUESTIONS_DIR, file));
-    const values = cards.map((c) => `(${q(deckDbId)}, ${q(c.question)}, ${q(c.answer)}, NULL)`).join(",");
+    const imageCache = new Map();
+    const values = cards
+      .map((c) => {
+        const questionImage = c.imageUrl ? downloadImageFromUrl(c.imageUrl, slug, imageCache) : null;
+        const answerImage = c.answerImageUrl ? downloadImageFromUrl(c.answerImageUrl, `${slug}-answer`, imageCache) : null;
+        return `(${q(deckDbId)}, ${q(c.question)}, ${q(c.answer)}, ${questionImage ? q(questionImage) : "NULL"}, ${
+          answerImage ? q(answerImage) : "NULL"
+        })`;
+      })
+      .join(",");
     if (values) {
-      runSql(`INSERT OR IGNORE INTO cards (deck_id, question, answer, image) VALUES ${values}`);
+      runSql(`INSERT OR IGNORE INTO cards (deck_id, question, answer, image, answer_image) VALUES ${values}`);
     }
   });
 }
@@ -275,6 +286,9 @@ function migrateDeckIdsToInt() {
   const idIsInt = deckInfo.some((c) => c.name === "id" && c.type && c.type.toLowerCase().includes("int"));
   if (hasSlug && idIsInt) return;
 
+  const cardInfo = runQuery(`PRAGMA table_info(cards)`);
+  const hasAnswerImage = cardInfo.some((c) => c.name === "answer_image");
+
   const hasProgressCreatedAt = tableHasColumn("progress", "created_at");
 
   runSqlBatch([
@@ -293,11 +307,12 @@ function migrateDeckIdsToInt() {
       question TEXT NOT NULL,
       answer TEXT NOT NULL,
       image TEXT,
+      answer_image TEXT,
       UNIQUE(deck_id, question, answer),
       FOREIGN KEY(deck_id) REFERENCES decks(id) ON DELETE CASCADE
     )`,
-    `INSERT INTO cards_new (id, deck_id, question, answer, image)
-     SELECT c.id, d.id, c.question, c.answer, c.image
+    `INSERT INTO cards_new (id, deck_id, question, answer, image, answer_image)
+     SELECT c.id, d.id, c.question, c.answer, c.image, ${hasAnswerImage ? "c.answer_image" : "NULL"}
      FROM cards c
      JOIN decks_new d ON d.slug = c.deck_id`,
 
@@ -343,6 +358,11 @@ function migrateDeckIdsToInt() {
   ]);
 }
 
+function migrateAnswerImages() {
+  if (tableHasColumn("cards", "answer_image")) return;
+  runSql(`ALTER TABLE cards ADD COLUMN answer_image TEXT`);
+}
+
 function ensureDefaultAdmin() {
   const existing = runQuery(`SELECT id FROM users WHERE email = ${q("admin@example.com")} LIMIT 1`);
   if (existing[0]) return existing[0].id;
@@ -360,11 +380,21 @@ function parseCsvQuestions(filePath) {
   const raw = fs.readFileSync(filePath, "utf8");
   const lines = raw.split(/\r?\n/).filter(Boolean);
   if (lines.length === 0) return [];
+  
+  // Auto-detect delimiter from header row
+  const header = lines[0];
+  const delimiter = header.includes(";") ? ";" : ",";
+  
   const rows = [];
   for (let i = 1; i < lines.length; i++) {
-    const cols = smartSplit(lines[i], ";");
+    const cols = smartSplit(lines[i], delimiter);
     if (cols.length < 2) continue;
-    rows.push({ question: cols[0].trim(), answer: cols[1].trim() });
+    rows.push({
+      question: cols[0].trim(),
+      answer: cols[1].trim(),
+      imageUrl: (cols[2] || "").trim() || null,
+      answerImageUrl: (cols[3] || "").trim() || null,
+    });
   }
   return rows;
 }
@@ -396,11 +426,14 @@ function smartSplit(line, delimiter = ",") {
 function getDeck(deckId) {
   const deckRow = runQuery(`SELECT id, title, filename FROM decks WHERE id = ${q(deckId)} LIMIT 1`)[0];
   if (!deckRow) return null;
-  const cards = runQuery(`SELECT id, question, answer, image FROM cards WHERE deck_id = ${q(deckId)} ORDER BY id`);
+  const cards = runQuery(`SELECT id, question, answer, image, answer_image FROM cards WHERE deck_id = ${q(deckId)} ORDER BY id`);
   const enriched = cards.map((c) => {
     return {
-      ...c,
+      id: c.id,
+      question: c.question,
+      answer: c.answer,
       image: c.image ? `/media/${c.image}` : null,
+      answerImage: c.answer_image ? `/media/${c.answer_image}` : null,
     };
   });
   return { ...deckRow, cards: enriched };
@@ -448,9 +481,25 @@ function getProgressReport(userId) {
   }));
 }
 
-function sendJson(res, status, data) {
+function getCorsHeaders(origin) {
+  const allowedOrigins = ["http://localhost:8081", "http://localhost:19006", "http://localhost:19000"];
+  const allowOrigin = origin && allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
+  return {
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Credentials": "true",
+    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+  };
+}
+
+function sendJson(res, status, data, origin) {
   const payload = JSON.stringify(data);
-  res.writeHead(status, { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) });
+  const headers = {
+    "Content-Type": "application/json",
+    "Content-Length": Buffer.byteLength(payload),
+    ...getCorsHeaders(origin),
+  };
+  res.writeHead(status, headers);
   res.end(payload);
 }
 
@@ -459,7 +508,8 @@ function serveStatic(req, res) {
   const mediaDir = MEDIA_DIR;
   const urlPath = req.url.split("?")[0].replace(/\/+$/, "") || "/";
   if (urlPath.startsWith("/media/")) {
-    const filePath = path.join(mediaDir, urlPath.replace("/media/", ""));
+    const filename = decodeURIComponent(urlPath.replace("/media/", ""));
+    const filePath = path.join(mediaDir, filename);
     if (filePath.startsWith(mediaDir) && fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
       const stream = fs.createReadStream(filePath);
       res.writeHead(200, { "Content-Type": contentType(filePath) });
@@ -490,6 +540,10 @@ function contentType(filePath) {
   if (ext === ".css") return "text/css";
   if (ext === ".json") return "application/json";
   if (ext === ".svg") return "image/svg+xml";
+  if (ext === ".jpg" || ext === ".jpeg") return "image/jpeg";
+  if (ext === ".png") return "image/png";
+  if (ext === ".gif") return "image/gif";
+  if (ext === ".webp") return "image/webp";
   return "text/plain; charset=utf-8";
 }
 
@@ -516,21 +570,22 @@ function createServer() {
     const url = new URL(req.url, "http://localhost");
     const pathParts = url.pathname.split("/").filter(Boolean);
     const auth = getAuth(req);
+    const origin = req.headers.origin;
 
     if (req.method === "GET" && url.pathname === "/api/decks") {
-      return sendJson(res, 200, { decks: listDecks() });
+      return sendJson(res, 200, { decks: listDecks() }, origin);
     }
 
     if (req.method === "GET" && url.pathname === "/api/reports/progress") {
-      if (!auth.user) return sendJson(res, 401, { error: "Unauthorized" });
+      if (!auth.user) return sendJson(res, 401, { error: "Unauthorized" }, origin);
       const report = getProgressReport(auth.user.id);
-      return sendJson(res, 200, { decks: report, generatedAt: nowSeconds() });
+      return sendJson(res, 200, { decks: report, generatedAt: nowSeconds() }, origin);
     }
 
     if (req.method === "GET" && pathParts[0] === "api" && pathParts[1] === "decks" && pathParts[2]) {
-      if (!auth.user) return sendJson(res, 401, { error: "Unauthorized" });
+      if (!auth.user) return sendJson(res, 401, { error: "Unauthorized" }, origin);
       const deck = getDeck(pathParts[2]);
-      if (!deck) return sendJson(res, 404, { error: "Deck not found" });
+      if (!deck) return sendJson(res, 404, { error: "Deck not found" }, origin);
       const progressRows = runQuery(`
         SELECT card_id, category FROM (
           SELECT card_id, category,
@@ -542,31 +597,32 @@ function createServer() {
       const progress = Object.fromEntries(progressRows.map((p) => [String(p.card_id), p.category]));
       const ratingRows = runQuery(`SELECT card_id, rating FROM ratings WHERE deck_id = ${q(deck.id)} AND user_id = ${q(auth.user.id)}`);
       const ratings = Object.fromEntries(ratingRows.map((r) => [String(r.card_id), r.rating]));
-      return sendJson(res, 200, { ...deck, progress, ratings, categories: CATEGORY_LABELS });
+      return sendJson(res, 200, { ...deck, progress, ratings, categories: CATEGORY_LABELS }, origin);
     }
 
     if (req.method === "POST" && pathParts[0] === "api" && pathParts[1] === "decks" && pathParts[2] && pathParts[3] === "progress") {
-      if (!auth.user) return sendJson(res, 401, { error: "Unauthorized" });
+      if (!auth.user) return sendJson(res, 401, { error: "Unauthorized" }, origin);
       const body = await parseBody(req);
       const { cardId, category } = body || {};
-      if (cardId === undefined || cardId === null) return sendJson(res, 400, { error: "cardId is required" });
-      if (!CATEGORY_LABELS.includes(category)) return sendJson(res, 400, { error: "Invalid category" });
+      if (cardId === undefined || cardId === null) return sendJson(res, 400, { error: "cardId is required" }, origin);
+      if (!CATEGORY_LABELS.includes(category)) return sendJson(res, 400, { error: "Invalid category" }, origin);
       runSql(
         `INSERT INTO progress (user_id, card_id, deck_id, category) VALUES (${q(auth.user.id)}, ${q(cardId)}, ${q(pathParts[2])}, ${q(category)})`
       );
-      return sendJson(res, 200, { ok: true });
+      return sendJson(res, 200, { ok: true }, origin);
     }
 
     if (req.method === "POST" && pathParts[0] === "api" && pathParts[1] === "admin" && pathParts[2] === "decks" && pathParts[3]) {
-      if (!auth.user || !auth.user.is_admin) return sendJson(res, 403, { error: "Admin required" });
+      if (!auth.user || !auth.user.is_admin) return sendJson(res, 403, { error: "Admin required" }, origin);
       const deckId = pathParts[3];
       const deck = getDeck(deckId);
-      if (!deck) return sendJson(res, 404, { error: "Deck not found" });
+      if (!deck) return sendJson(res, 404, { error: "Deck not found" }, origin);
       const body = await parseBody(req);
-      if (!body || !Array.isArray(body.cards)) return sendJson(res, 400, { error: "cards array required" });
+      if (!body || !Array.isArray(body.cards)) return sendJson(res, 400, { error: "cards array required" }, origin);
 
-      const existing = runQuery(`SELECT id, question, answer, image FROM cards WHERE deck_id = ${q(deckId)}`);
+      const existing = runQuery(`SELECT id, question, answer, image, answer_image FROM cards WHERE deck_id = ${q(deckId)}`);
       const existingById = new Map(existing.map((c) => [c.id, c]));
+      const existingIds = new Set(existing.map((c) => c.id));
 
       const rows = [];
       const insertValues = [];
@@ -580,6 +636,7 @@ function createServer() {
         const existingCard = item.id ? existingById.get(item.id) : null;
 
         let filename = null;
+        let answerFilename = null;
         if (item.imageData && typeof item.imageData === "string" && item.imageData.startsWith("data:")) {
           filename = saveDataUrl(item.imageData, deckId);
         } else if (item.imagePath && typeof item.imagePath === "string") {
@@ -590,22 +647,46 @@ function createServer() {
           filename = existingCard.image;
         }
 
+        if (item.answerImageData && typeof item.answerImageData === "string" && item.answerImageData.startsWith("data:")) {
+          answerFilename = saveDataUrl(item.answerImageData, `${deckId}-answer`);
+        } else if (item.answerImagePath && typeof item.answerImagePath === "string") {
+          answerFilename = path.basename(item.answerImagePath.replace("/media/", ""));
+        } else if (item.removeAnswerImage) {
+          answerFilename = null;
+        } else if (existingCard && existingCard.answer_image) {
+          answerFilename = existingCard.answer_image;
+        }
+
         if (existingCard) {
           keepIds.add(existingCard.id);
           updateStatements.push(
-            `UPDATE cards SET question=${q(question)}, answer=${q(answer)}, image=${filename ? q(filename) : "NULL"} WHERE id=${existingCard.id}`
+            `UPDATE cards SET question=${q(question)}, answer=${q(answer)}, image=${filename ? q(filename) : "NULL"}, answer_image=${
+              answerFilename ? q(answerFilename) : "NULL"
+            } WHERE id=${existingCard.id}`
           );
         } else {
-          insertValues.push(`(${q(deckId)}, ${q(question)}, ${q(answer)}, ${filename ? q(filename) : "NULL"})`);
+          insertValues.push(
+            `(${q(deckId)}, ${q(question)}, ${q(answer)}, ${filename ? q(filename) : "NULL"}, ${
+              answerFilename ? q(answerFilename) : "NULL"
+            })`
+          );
         }
-        rows.push({ question, answer });
+        rows.push({
+          question,
+          answer,
+          image: filename ? `/media/${filename}` : "",
+          answerImage: answerFilename ? `/media/${answerFilename}` : "",
+        });
       }
 
       const stmts = [`BEGIN`];
       if (updateStatements.length) stmts.push(...updateStatements);
-      if (insertValues.length) stmts.push(`INSERT INTO cards (deck_id, question, answer, image) VALUES ${insertValues.join(",")}`);
-      const keepList = [...keepIds].join(",");
-      stmts.push(`DELETE FROM cards WHERE deck_id = ${q(deckId)}${keepIds.size ? ` AND id NOT IN (${keepList})` : ""}`);
+      if (insertValues.length)
+        stmts.push(`INSERT INTO cards (deck_id, question, answer, image, answer_image) VALUES ${insertValues.join(",")}`);
+      const removeIds = [...existingIds].filter((id) => !keepIds.has(id));
+      if (removeIds.length) {
+        stmts.push(`DELETE FROM cards WHERE deck_id = ${q(deckId)} AND id IN (${removeIds.join(",")})`);
+      }
       stmts.push(`DELETE FROM progress WHERE deck_id = ${q(deckId)} AND card_id NOT IN (SELECT id FROM cards WHERE deck_id=${q(deckId)})`);
       stmts.push(`DELETE FROM ratings WHERE deck_id = ${q(deckId)} AND card_id NOT IN (SELECT id FROM cards WHERE deck_id=${q(deckId)})`);
       stmts.push(`COMMIT`);
@@ -613,16 +694,16 @@ function createServer() {
 
       writeDeckCsv(deckId, rows, deck.filename);
       cleanupUnusedMedia();
-      return sendJson(res, 200, { ok: true });
+      return sendJson(res, 200, { ok: true }, origin);
     }
 
     if (req.method === "POST" && pathParts[0] === "api" && pathParts[1] === "decks" && pathParts[2] && pathParts[3] === "rating") {
-      if (!auth.user) return sendJson(res, 401, { error: "Unauthorized" });
+      if (!auth.user) return sendJson(res, 401, { error: "Unauthorized" }, origin);
       const deckId = pathParts[2];
       const body = await parseBody(req);
       const { cardId, rating } = body || {};
-      if (cardId === undefined || cardId === null) return sendJson(res, 400, { error: "cardId is required" });
-      if (rating !== "up" && rating !== "down" && rating !== null) return sendJson(res, 400, { error: "rating must be up, down, or null" });
+      if (cardId === undefined || cardId === null) return sendJson(res, 400, { error: "cardId is required" }, origin);
+      if (rating !== "up" && rating !== "down" && rating !== null) return sendJson(res, 400, { error: "rating must be up, down, or null" }, origin);
       if (rating === null) {
         runSql(`DELETE FROM ratings WHERE user_id = ${q(auth.user.id)} AND card_id = ${q(cardId)} AND deck_id = ${q(deckId)}`);
       } else {
@@ -630,49 +711,54 @@ function createServer() {
           `INSERT OR REPLACE INTO ratings (user_id, card_id, deck_id, rating) VALUES (${q(auth.user.id)}, ${q(cardId)}, ${q(deckId)}, ${q(rating)})`
         );
       }
-      return sendJson(res, 200, { ok: true });
+      return sendJson(res, 200, { ok: true }, origin);
     }
 
     if (req.method === "POST" && url.pathname === "/api/auth/register") {
       const body = await parseBody(req);
       const { email, name, password } = body || {};
-      if (!email || !name || !password) return sendJson(res, 400, { error: "email, name, password required" });
+      if (!email || !name || !password) return sendJson(res, 400, { error: "email, name, password required" }, origin);
       const exists = runQuery(`SELECT id FROM users WHERE email = ${q(email)} LIMIT 1`);
-      if (exists[0]) return sendJson(res, 400, { error: "Email already registered" });
+      if (exists[0]) return sendJson(res, 400, { error: "Email already registered" }, origin);
       const hash = hashPassword(password);
       runSql(`INSERT INTO users (email, name, password_hash, is_admin) VALUES (${q(email)}, ${q(name)}, ${q(hash)}, 0)`);
       const user = runQuery(`SELECT id, email, name, is_admin FROM users WHERE email = ${q(email)} LIMIT 1`)[0];
       const token = createSession(user.id);
       setSessionCookie(res, token);
-      return sendJson(res, 200, { user });
+      return sendJson(res, 200, { user }, origin);
     }
 
     if (req.method === "POST" && url.pathname === "/api/auth/login") {
       const body = await parseBody(req);
       const { email, password } = body || {};
-      if (!email || !password) return sendJson(res, 400, { error: "email and password required" });
+      if (!email || !password) return sendJson(res, 400, { error: "email and password required" }, origin);
       const user = runQuery(`SELECT id, email, name, is_admin, password_hash FROM users WHERE email = ${q(email)} LIMIT 1`)[0];
-      if (!user || !verifyPassword(password, user.password_hash)) return sendJson(res, 401, { error: "Invalid credentials" });
+      if (!user || !verifyPassword(password, user.password_hash)) return sendJson(res, 401, { error: "Invalid credentials" }, origin);
       const token = createSession(user.id);
       setSessionCookie(res, token);
       delete user.password_hash;
-      return sendJson(res, 200, { user });
+      return sendJson(res, 200, { user }, origin);
     }
 
     if (req.method === "POST" && url.pathname === "/api/auth/logout") {
       const cookies = parseCookies(req);
       if (cookies.session) runSql(`DELETE FROM sessions WHERE token = ${q(cookies.session)}`);
-      res.writeHead(204, { "Set-Cookie": clearSessionCookie() }).end();
+      const headers = {
+        "Set-Cookie": clearSessionCookie(),
+        ...getCorsHeaders(origin),
+      };
+      res.writeHead(204, headers).end();
       return;
     }
 
     if (req.method === "GET" && url.pathname === "/api/me") {
-      if (!auth.user) return sendJson(res, 401, { error: "Unauthorized" });
-      return sendJson(res, 200, { user: auth.user });
+      if (!auth.user) return sendJson(res, 401, { error: "Unauthorized" }, origin);
+      return sendJson(res, 200, { user: auth.user }, origin);
     }
 
     if (req.method === "OPTIONS") {
-      res.writeHead(204, { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET,POST,OPTIONS", "Access-Control-Allow-Headers": "Content-Type" });
+      const origin = req.headers.origin;
+      res.writeHead(204, getCorsHeaders(origin));
       res.end();
       return;
     }
@@ -726,9 +812,11 @@ function clearSessionCookie() {
 function writeDeckCsv(deckId, rows, filename) {
   if (!filename) return;
   const filePath = path.join(QUESTIONS_DIR, filename);
-  const lines = ["Въпрос;Отговор"];
+  const lines = ["Въпрос;Отговор;Изображение;Изображение на отговор"];
   for (const r of rows) {
-    lines.push(`${escapeCsv(r.question)};${escapeCsv(r.answer)}`);
+    lines.push(
+      `${escapeCsv(r.question)};${escapeCsv(r.answer)};${escapeCsv(r.image || "")};${escapeCsv(r.answerImage || "")}`
+    );
   }
   fs.writeFileSync(filePath, lines.join("\n"), "utf8");
 }
@@ -757,8 +845,46 @@ function mimeToExt(mime) {
   return "bin";
 }
 
+function downloadImageFromUrl(url, deckSlug, cache = new Map()) {
+  const trimmed = (url || "").trim();
+  if (!trimmed || !/^https?:\/\//i.test(trimmed)) return null;
+  if (cache.has(trimmed)) return cache.get(trimmed);
+
+  ensureDataDirs();
+  let ext = "";
+  try {
+    const parsed = new URL(trimmed);
+    ext = path.extname(parsed.pathname).replace(".", "").toLowerCase();
+  } catch {
+    ext = "";
+  }
+  const safeExt = ext && ext.length <= 5 ? ext : "jpg";
+  const filename = `${deckSlug || "deck"}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${safeExt}`;
+  const filePath = path.join(MEDIA_DIR, filename);
+
+  try {
+    execSync(`curl -L --silent --show-error ${shellq(trimmed)} -o ${shellq(filePath)}`);
+    if (!fs.existsSync(filePath) || fs.statSync(filePath).size === 0) {
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      cache.set(trimmed, null);
+      return null;
+    }
+    cache.set(trimmed, filename);
+    return filename;
+  } catch {
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    cache.set(trimmed, null);
+    return null;
+  }
+}
+
 function cleanupUnusedMedia() {
-  const used = new Set(runQuery("SELECT image FROM cards WHERE image IS NOT NULL").map((row) => row.image));
+  const rows = runQuery("SELECT image, answer_image FROM cards WHERE image IS NOT NULL OR answer_image IS NOT NULL");
+  const used = new Set();
+  rows.forEach((row) => {
+    if (row.image) used.add(row.image);
+    if (row.answer_image) used.add(row.answer_image);
+  });
   const files = fs.existsSync(MEDIA_DIR) ? fs.readdirSync(MEDIA_DIR) : [];
   files.forEach((file) => {
     if (!used.has(file)) {

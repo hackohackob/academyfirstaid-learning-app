@@ -117,7 +117,9 @@
           ...c,
           id: c.id,
           imageData: null,
+          answerImageData: null,
           removeImage: false,
+          removeAnswerImage: false,
           expanded: false,
         }));
         render();
@@ -146,7 +148,7 @@
 
           const right = document.createElement("div");
           right.className = "chips";
-          if (card.image || card.imageData) {
+          if (card.image || card.imageData || card.answerImage || card.answerImageData) {
             const chip = document.createElement("span");
             chip.className = "chip";
             chip.textContent = "Media";
@@ -173,52 +175,8 @@
           body.appendChild(buildTextarea("Question", card.question || "", (val) => (card.question = val)));
           body.appendChild(buildTextarea("Answer", card.answer || "", (val) => (card.answer = val)));
 
-          const imageRow = document.createElement("div");
-          imageRow.className = "image-row";
-          const drop = document.createElement("div");
-          drop.className = "drop";
-          drop.textContent = "Drop image or click to upload";
-          drop.onclick = () => chooseFile(idx);
-          drop.ondragover = (e) => {
-            e.preventDefault();
-            drop.style.borderColor = "var(--accent)";
-          };
-          drop.ondragleave = () => (drop.style.borderColor = "var(--border)");
-          drop.ondrop = (e) => {
-            e.preventDefault();
-            drop.style.borderColor = "var(--border)";
-            if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0], idx);
-          };
-
-          const previewRow = document.createElement("div");
-          previewRow.className = "row";
-          const url = card.imageData || card.image || card.imagePath;
-          if (url) {
-            const img = document.createElement("img");
-            img.src = url;
-            img.className = "thumb";
-            previewRow.appendChild(img);
-            const removeBtn = document.createElement("button");
-            removeBtn.className = "btn";
-            removeBtn.textContent = "Remove image";
-            removeBtn.onclick = () => {
-              card.imageData = null;
-              card.image = null;
-              card.imagePath = null;
-              card.removeImage = true;
-              render();
-            };
-            previewRow.appendChild(removeBtn);
-          } else {
-            const empty = document.createElement("span");
-            empty.className = "pill-small";
-            empty.textContent = "No image";
-            previewRow.appendChild(empty);
-          }
-
-          imageRow.appendChild(drop);
-          imageRow.appendChild(previewRow);
-          body.appendChild(imageRow);
+          body.appendChild(buildImageRow("Question image", idx, "image"));
+          body.appendChild(buildImageRow("Answer image", idx, "answerImage"));
 
           wrapper.appendChild(header);
           wrapper.appendChild(body);
@@ -240,6 +198,67 @@
         return container;
       }
 
+      function buildImageRow(label, idx, field) {
+        const isAnswer = field === "answerImage";
+        const container = document.createElement("div");
+        container.className = "image-row";
+
+        const drop = document.createElement("div");
+        drop.className = "drop";
+        drop.textContent = `${label}: Drop or click to upload`;
+        drop.onclick = () => chooseFile(idx, field);
+        drop.ondragover = (e) => {
+          e.preventDefault();
+          drop.style.borderColor = "var(--accent)";
+        };
+        drop.ondragleave = () => (drop.style.borderColor = "var(--border)");
+        drop.ondrop = (e) => {
+          e.preventDefault();
+          drop.style.borderColor = "var(--border)";
+          if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0], idx, field);
+        };
+
+        const previewRow = document.createElement("div");
+        previewRow.className = "row";
+        const url =
+          (isAnswer ? cards[idx].answerImageData : cards[idx].imageData) ||
+          (isAnswer ? cards[idx].answerImage : cards[idx].image) ||
+          (isAnswer ? cards[idx].answerImagePath : cards[idx].imagePath);
+        if (url) {
+          const img = document.createElement("img");
+          img.src = url;
+          img.className = "thumb";
+          previewRow.appendChild(img);
+          const removeBtn = document.createElement("button");
+          removeBtn.className = "btn";
+          removeBtn.textContent = "Remove";
+          removeBtn.onclick = () => {
+            if (isAnswer) {
+              cards[idx].answerImageData = null;
+              cards[idx].answerImage = null;
+              cards[idx].answerImagePath = null;
+              cards[idx].removeAnswerImage = true;
+            } else {
+              cards[idx].imageData = null;
+              cards[idx].image = null;
+              cards[idx].imagePath = null;
+              cards[idx].removeImage = true;
+            }
+            render();
+          };
+          previewRow.appendChild(removeBtn);
+        } else {
+          const empty = document.createElement("span");
+          empty.className = "pill-small";
+          empty.textContent = "No image";
+          previewRow.appendChild(empty);
+        }
+
+        container.appendChild(drop);
+        container.appendChild(previewRow);
+        return container;
+      }
+
       function addCard() {
         cards.push({
           id: null,
@@ -247,7 +266,10 @@
           answer: "",
           image: null,
           imageData: null,
+          answerImage: null,
+          answerImageData: null,
           removeImage: false,
+          removeAnswerImage: false,
           expanded: true,
         });
         render();
@@ -259,22 +281,28 @@
         }
       }
 
-      function chooseFile(idx) {
+      function chooseFile(idx, field = "image") {
         const input = document.createElement("input");
         input.type = "file";
         input.accept = "image/*";
         input.onchange = () => {
-          if (input.files && input.files[0]) handleFile(input.files[0], idx);
+          if (input.files && input.files[0]) handleFile(input.files[0], idx, field);
         };
         input.click();
       }
 
-      function handleFile(file, idx) {
+      function handleFile(file, idx, field = "image") {
         const reader = new FileReader();
         reader.onload = () => {
-          cards[idx].imageData = reader.result;
-          cards[idx].image = null;
-          cards[idx].removeImage = false;
+          if (field === "answerImage") {
+            cards[idx].answerImageData = reader.result;
+            cards[idx].answerImage = null;
+            cards[idx].removeAnswerImage = false;
+          } else {
+            cards[idx].imageData = reader.result;
+            cards[idx].image = null;
+            cards[idx].removeImage = false;
+          }
           render();
         };
         reader.readAsDataURL(file);
@@ -290,6 +318,9 @@
             imageData: c.imageData || null,
             imagePath: c.image && !c.imageData && !c.removeImage ? c.image : null,
             removeImage: !!c.removeImage,
+            answerImageData: c.answerImageData || null,
+            answerImagePath: c.answerImage && !c.answerImageData && !c.removeAnswerImage ? c.answerImage : null,
+            removeAnswerImage: !!c.removeAnswerImage,
           })),
         };
         const res = await fetch(`/api/admin/decks/${deckId}`, {
@@ -313,7 +344,7 @@
 
       function renderStats() {
         const total = cards.length;
-        const withMedia = cards.filter((c) => c.image || c.imageData).length;
+        const withMedia = cards.filter((c) => c.image || c.imageData || c.answerImage || c.answerImageData).length;
         const incomplete = cards.filter((c) => !c.question || !c.answer).length;
         statTotal.textContent = total;
         statMedia.textContent = withMedia;

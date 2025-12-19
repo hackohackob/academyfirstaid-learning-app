@@ -71,8 +71,14 @@ main {
   margin-top: 14px;
 }
 
-#imageFrame{
+#imageFrame,
+#answerImageFrame{
   text-align: center;
+}
+
+#answerImageFrame {
+  margin-bottom: 10px;
+  display: none;
 }
 
 .question-img {
