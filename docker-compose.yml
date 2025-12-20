@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   app:
-    image: hackohackob/academyfirstaid:latest
+    image: hackohackob1/academyfirstaid:latest
     container_name: academyfirstaid-app
     restart: unless-stopped
     ports:
