@@ -504,6 +504,37 @@ function getProgressReport(userId) {
   }));
 }
 
+function getAllUsersWithProgress() {
+  const users = runQuery(`SELECT id, email, name, is_admin FROM users ORDER BY LOWER(name), LOWER(email)`);
+  return users.map((user) => {
+    const decks = getProgressReport(user.id);
+    const totals = decks.reduce(
+      (acc, deck) => {
+        acc.totalCards += deck.totalCards || 0;
+        acc.answered += deck.answered || 0;
+        acc.unanswered += deck.unanswered || 0;
+        return acc;
+      },
+      { totalCards: 0, answered: 0, unanswered: 0 }
+    );
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      isAdmin: !!user.is_admin,
+      decks,
+      totals,
+    };
+  });
+}
+
+function resetUserProgress(userId) {
+  runSqlBatch([
+    `DELETE FROM progress WHERE user_id = ${q(userId)}`,
+    `DELETE FROM ratings WHERE user_id = ${q(userId)}`,
+  ]);
+}
+
 function getCorsHeaders(origin) {
   const allowedOrigins = ["http://localhost:8081", "http://localhost:19006", "http://localhost:19000"];
   const allowOrigin = origin && allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
@@ -720,6 +751,34 @@ function createServer() {
       writeDeckCsv(deckId, rows, deck.filename);
       cleanupUnusedMedia();
       return sendJson(res, 200, { ok: true, title: newTitle }, origin);
+    }
+
+    if (
+      req.method === "GET" &&
+      pathParts[0] === "api" &&
+      pathParts[1] === "admin" &&
+      pathParts[2] === "users" &&
+      pathParts.length === 3
+    ) {
+      if (!auth.user || !auth.user.is_admin) return sendJson(res, 403, { error: "Admin required" }, origin);
+      const users = getAllUsersWithProgress();
+      return sendJson(res, 200, { users }, origin);
+    }
+
+    if (
+      req.method === "POST" &&
+      pathParts[0] === "api" &&
+      pathParts[1] === "admin" &&
+      pathParts[2] === "users" &&
+      pathParts[3] &&
+      pathParts[4] === "reset"
+    ) {
+      if (!auth.user || !auth.user.is_admin) return sendJson(res, 403, { error: "Admin required" }, origin);
+      const userId = pathParts[3];
+      const exists = runQuery(`SELECT id FROM users WHERE id = ${q(userId)} LIMIT 1`)[0];
+      if (!exists) return sendJson(res, 404, { error: "User not found" }, origin);
+      resetUserProgress(userId);
+      return sendJson(res, 200, { ok: true }, origin);
     }
 
     if (req.method === "POST" && pathParts[0] === "api" && pathParts[1] === "decks" && pathParts[2] && pathParts[3] === "rating") {
