@@ -46,7 +46,23 @@ jobs:
             cd /opt/academyfirstaid || exit 1
             # Update docker-compose.yml with correct image name
             sed -i 's|hackohackob/academyfirstaid|hackohackob1/academyfirstaid|g' docker-compose.yml || true
+            # Ensure required directories exist
+            mkdir -p flashcards-app/data questions
+            # Pull and start containers
             docker-compose pull
             docker-compose up -d --remove-orphans
+            # Wait a moment for container to start
+            sleep 5
+            # Check container status
+            echo "=== Container Status ==="
+            docker-compose ps
+            echo "=== Container Logs (last 50 lines) ==="
+            docker-compose logs --tail=50 app || true
+            # Check if container is running
+            if ! docker-compose ps | grep -q "Up"; then
+              echo "ERROR: Container is not running!"
+              docker-compose logs app
+              exit 1
+            fi
             docker system prune -f
             echo "Deployment completed successfully"
