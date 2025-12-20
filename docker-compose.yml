@@ -9,7 +9,7 @@ services:
       - "127.0.0.1:3000:3000"
     volumes:
       - ./flashcards-app/data:/app/flashcards-app/data
-      - ./questions:/app/questions:ro
+      - ./questions:/app/questions
     environment:
       - PORT=3000
       - NODE_ENV=production

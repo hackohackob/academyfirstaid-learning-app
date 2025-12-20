@@ -89,6 +89,7 @@ main {
   object-fit: cover;
   max-height: 280px;
   cursor: zoom-in;
+  max-width: 100%;
 }
 
 .empty-img {
