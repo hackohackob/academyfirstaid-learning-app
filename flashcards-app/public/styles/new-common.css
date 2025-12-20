@@ -178,6 +178,32 @@ select:focus-visible {
   border-style: dashed;
 }
 
+.btn.danger {
+  background: linear-gradient(135deg, #ef4444, #f97316);
+  color: #0b0f1d;
+  border-color: transparent;
+  box-shadow: 0 12px 40px rgba(239, 68, 68, 0.35);
+}
+
+.btn.danger:hover {
+  border-color: #ef4444;
+  box-shadow: 0 12px 40px rgba(239, 68, 68, 0.4);
+}
+
+.btn.danger.ghost {
+  background: transparent;
+  color: var(--danger);
+  border-color: rgba(239, 68, 68, 0.8);
+  box-shadow: none;
+}
+
+.btn.danger.ghost:hover {
+  border-color: #ef4444;
+  color: #fff;
+  background: rgba(239, 68, 68, 0.08);
+  box-shadow: 0 10px 30px rgba(239, 68, 68, 0.2);
+}
+
 .pill {
   background: rgba(88, 197, 103, 0.1);
   color: var(--text);

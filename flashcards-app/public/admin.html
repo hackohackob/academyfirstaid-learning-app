@@ -34,6 +34,7 @@
         <div class="controls">
           <a href="/index.html" class="btn ghost">Open learner view</a>
           <button id="addCard" class="btn">Add Card</button>
+          <button id="deleteDeck" class="btn danger ghost">Delete deck</button>
           <button id="saveBtn" class="btn primary">Save Changes</button>
         </div>
       </div>
@@ -82,6 +83,7 @@
       const addInlineBtn = document.getElementById("addCardInline");
       const saveBtn = document.getElementById("saveBtn");
       const saveInlineBtn = document.getElementById("saveInline");
+      const deleteBtn = document.getElementById("deleteDeck");
       const statTotal = document.getElementById("statTotal");
       const statMedia = document.getElementById("statMedia");
       const statEmpty = document.getElementById("statEmpty");
@@ -100,20 +102,40 @@
         addInlineBtn.onclick = addCard;
         saveBtn.onclick = save;
         saveInlineBtn.onclick = save;
+        deleteBtn.onclick = deleteDeck;
       }
 
-      async function loadDecks() {
+      async function loadDecks(preselectId = null) {
         const res = await fetch("/api/decks");
+        if (!res.ok) {
+          statusEl.textContent = "Unable to load decks.";
+          return;
+        }
         const data = await res.json();
         deckSelect.innerHTML = "";
-        data.decks.forEach((d, i) => {
+        const decks = data.decks || [];
+        if (!decks.length) {
+          deckId = null;
+          deckTitle = "";
+          deckTitleInput.value = "";
+          cards = [];
+          render();
+          statusEl.textContent = "No decks available.";
+          return;
+        }
+        decks.forEach((d, i) => {
           const opt = document.createElement("option");
           opt.value = d.id;
           opt.textContent = d.title;
           if (i === 0) opt.selected = true;
           deckSelect.appendChild(opt);
         });
-        if (data.decks[0]) await loadDeck(data.decks[0].id);
+        const desiredId =
+          preselectId && decks.some((d) => String(d.id) === String(preselectId)) ? preselectId : decks[0]?.id || null;
+        if (desiredId) {
+          deckSelect.value = desiredId;
+          await loadDeck(desiredId);
+        }
       }
 
       async function loadDeck(id) {
@@ -359,6 +381,21 @@
         const option = Array.from(deckSelect.options).find((opt) => opt.value === String(deckId));
         if (option) option.textContent = deckTitle;
         await loadDeck(deckId);
+      }
+
+      async function deleteDeck() {
+        if (!deckId) return;
+        const name = (deckTitleInput.value || deckTitle || "this deck").trim();
+        const confirmed = window.confirm(`Delete "${name}" and all of its questions? This cannot be undone.`);
+        if (!confirmed) return;
+        statusEl.textContent = "Deleting deck...";
+        const res = await fetch(`/api/admin/decks/${deckId}`, { method: "DELETE" });
+        if (!res.ok) {
+          statusEl.textContent = "Delete failed.";
+          return;
+        }
+        statusEl.textContent = "Deck deleted.";
+        await loadDecks();
       }
 
       function truncate(str, max) {

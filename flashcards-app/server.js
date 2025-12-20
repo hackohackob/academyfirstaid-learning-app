@@ -754,6 +754,34 @@ function createServer() {
     }
 
     if (
+      req.method === "DELETE" &&
+      pathParts[0] === "api" &&
+      pathParts[1] === "admin" &&
+      pathParts[2] === "decks" &&
+      pathParts[3]
+    ) {
+      if (!auth.user || !auth.user.is_admin) return sendJson(res, 403, { error: "Admin required" }, origin);
+      const deckId = pathParts[3];
+      const deck = runQuery(`SELECT id, filename FROM decks WHERE id = ${q(deckId)} LIMIT 1`)[0];
+      if (!deck) return sendJson(res, 404, { error: "Deck not found" }, origin);
+      const statements = [
+        "BEGIN",
+        `DELETE FROM progress WHERE deck_id = ${q(deckId)}`,
+        `DELETE FROM ratings WHERE deck_id = ${q(deckId)}`,
+        `DELETE FROM cards WHERE deck_id = ${q(deckId)}`,
+        `DELETE FROM decks WHERE id = ${q(deckId)}`,
+        "COMMIT",
+      ];
+      runSqlBatch(statements);
+      if (deck.filename) {
+        const csvPath = path.join(QUESTIONS_DIR, deck.filename);
+        if (fs.existsSync(csvPath)) fs.unlinkSync(csvPath);
+      }
+      cleanupUnusedMedia();
+      return sendJson(res, 200, { ok: true }, origin);
+    }
+
+    if (
       req.method === "GET" &&
       pathParts[0] === "api" &&
       pathParts[1] === "admin" &&
