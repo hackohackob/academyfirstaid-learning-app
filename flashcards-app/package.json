@@ -1,0 +1,15 @@
+{
+  "name": "academyfirstaid-flashcards",
+  "version": "1.0.0",
+  "description": "Academy First Aid Flashcards App",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {},
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
+
+

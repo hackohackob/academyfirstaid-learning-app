@@ -557,10 +557,16 @@ function sendJson(res, status, data, origin) {
   res.end(payload);
 }
 
-function serveStatic(req, res) {
+function serveStatic(req, res, pathname) {
   const publicDir = path.join(__dirname, "public");
   const mediaDir = MEDIA_DIR;
-  const urlPath = req.url.split("?")[0].replace(/\/+$/, "") || "/";
+  let urlPath = (pathname || req.url.split("?")[0]).replace(/\/+$/, "") || "/";
+  // Decode URL-encoded characters
+  try {
+    urlPath = decodeURIComponent(urlPath);
+  } catch (e) {
+    // If decoding fails, use original path
+  }
   if (urlPath.startsWith("/media/")) {
     const filename = decodeURIComponent(urlPath.replace("/media/", ""));
     const filePath = path.join(mediaDir, filename);
@@ -583,6 +589,15 @@ function serveStatic(req, res) {
     res.writeHead(200, { "Content-Type": contentType(filePath) });
     stream.pipe(res);
     return true;
+  }
+  // Debug logging (remove after fixing)
+  if (process.env.NODE_ENV !== 'production' || urlPath.includes('admin-users')) {
+    console.error(`[serveStatic] File not found: ${filePath}`);
+    console.error(`[serveStatic] urlPath: ${urlPath}, publicDir: ${publicDir}`);
+    console.error(`[serveStatic] File exists: ${fs.existsSync(filePath)}`);
+    if (fs.existsSync(filePath)) {
+      console.error(`[serveStatic] Is file: ${fs.statSync(filePath).isFile()}`);
+    }
   }
   return false;
 }
@@ -875,7 +890,7 @@ function createServer() {
       return;
     }
 
-    if (serveStatic(req, res)) return;
+    if (serveStatic(req, res, url.pathname)) return;
     res.writeHead(404).end("Not found");
   });
 }

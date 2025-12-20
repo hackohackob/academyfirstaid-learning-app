@@ -1,0 +1,163 @@
+.page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 24px 24px 8px;
+}
+
+.page-head h1 {
+  margin: 6px 0 4px;
+}
+
+.eyebrow {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.user-grid {
+  display: grid;
+  gap: 12px;
+  padding: 0 24px 24px;
+}
+
+.controls {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.user-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.user-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.user-title {
+  display: grid;
+  gap: 4px;
+}
+
+.user-title .name {
+  font-weight: 800;
+  font-size: 18px;
+  letter-spacing: -0.01em;
+}
+
+.chip-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.badge {
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.06);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+
+.stat {
+  display: grid;
+  gap: 2px;
+  text-align: right;
+}
+
+.stat-value {
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.deck-list {
+  display: grid;
+  gap: 10px;
+}
+
+.deck-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  gap: 10px;
+  align-items: center;
+}
+
+.deck-title {
+  font-weight: 700;
+}
+
+.deck-meta {
+  display: grid;
+  gap: 6px;
+}
+
+.stacked-bar {
+  display: flex;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  height: 12px;
+  background: #0c1324;
+}
+
+.chunk.again {
+  background: var(--report-again);
+}
+
+.chunk.hard {
+  background: var(--report-hard);
+}
+
+.chunk.good {
+  background: var(--report-good);
+}
+
+.chunk.easy {
+  background: var(--report-easy);
+}
+
+.chunk.unanswered {
+  background: var(--report-unanswered);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.btn.danger {
+  border-color: rgba(239, 68, 68, 0.6);
+  color: var(--danger);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.empty {
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  color: var(--muted);
+  text-align: center;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+@media (max-width: 820px) {
+  .deck-row {
+    grid-template-columns: 1fr;
+  }
+}

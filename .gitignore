@@ -18,7 +18,6 @@ flashcards-app/data/progress.json
 # Logs
 npm-debug.log*
 yarn-error.log*
-flashcards-app/
 questions/
 compressed_chunked/
 compressed/

@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin • Users</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;600;700&family=Noto+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles/new-common.css" />
+    <link rel="stylesheet" href="/styles/users-admin.css" />
+  </head>
+  <body>
+    <header>
+      <div class="topbar">
+        <div class="brand">
+          <div class="logo">PP</div>
+          <div>
+            <div class="brand-name">Paramedic Prep Admin</div>
+            <div class="brand-sub">User management</div>
+          </div>
+        </div>
+        <div class="controls">
+          <a class="btn ghost" href="/index.html">Learner view</a>
+          <a class="btn ghost" href="/admin.html">Deck editor</a>
+          <button class="btn primary" id="refreshBtn" type="button">Refresh</button>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="page-head">
+        <div>
+          <div class="eyebrow">Admin</div>
+          <h1>User progress</h1>
+          <p class="muted">View every learner, their progress per lesson, and reset progress when needed.</p>
+        </div>
+        <div class="pill" id="statusText">Loading users...</div>
+      </section>
+
+      <section id="usersGrid" class="user-grid"></section>
+    </main>
+
+    <script>
+      const usersGrid = document.getElementById("usersGrid");
+      const statusText = document.getElementById("statusText");
+      const refreshBtn = document.getElementById("refreshBtn");
+
+      refreshBtn.onclick = loadUsers;
+      loadUsers();
+
+      async function loadUsers() {
+        statusText.textContent = "Loading users...";
+        usersGrid.innerHTML = "";
+        const res = await fetch("/api/admin/users");
+        if (res.status === 403) {
+          statusText.textContent = "Admin access required.";
+          usersGrid.innerHTML = `<div class="empty">You need an admin account to view users.</div>`;
+          return;
+        }
+        if (!res.ok) {
+          statusText.textContent = "Unable to load users right now.";
+          usersGrid.innerHTML = `<div class="empty">Please try again in a moment.</div>`;
+          return;
+        }
+        const data = await res.json();
+        renderUsers(data.users || []);
+      }
+
+      function renderUsers(users = []) {
+        if (!users.length) {
+          statusText.textContent = "No users found.";
+          usersGrid.innerHTML = `<div class="empty">No registered users yet.</div>`;
+          return;
+        }
+        statusText.textContent = `${users.length} user${users.length === 1 ? "" : "s"}`;
+        usersGrid.innerHTML = "";
+        users.forEach((user) => {
+          usersGrid.appendChild(renderUserCard(user));
+        });
+      }
+
+      function renderUserCard(user) {
+        const card = document.createElement("div");
+        card.className = "user-card";
+
+        const header = document.createElement("div");
+        header.className = "user-head";
+        const title = document.createElement("div");
+        title.className = "user-title";
+        title.innerHTML = `<div class="eyebrow">User</div><div class="name">${user.name}</div><div class="muted">${user.email}</div>`;
+        const chips = document.createElement("div");
+        chips.className = "chip-row";
+        if (user.isAdmin) {
+          const badge = document.createElement("span");
+          badge.className = "badge";
+          badge.textContent = "Admin";
+          chips.appendChild(badge);
+        }
+        const total = user.totals || { answered: 0, totalCards: 0 };
+        const pct = total.totalCards ? Math.round((total.answered / total.totalCards) * 100) : 0;
+        const stat = document.createElement("div");
+        stat.className = "stat";
+        stat.innerHTML = `<div class="stat-value">${total.answered} / ${total.totalCards || 0}</div><div class="muted">cards answered (${pct}%)</div>`;
+        chips.appendChild(stat);
+        header.appendChild(title);
+        header.appendChild(chips);
+
+        const deckList = document.createElement("div");
+        deckList.className = "deck-list";
+        const decks = user.decks || [];
+        decks.forEach((deck) => deckList.appendChild(renderDeckRow(deck)));
+
+        const actions = document.createElement("div");
+        actions.className = "actions";
+        const resetBtn = document.createElement("button");
+        resetBtn.className = "btn danger";
+        resetBtn.type = "button";
+        resetBtn.textContent = "Reset progress";
+        resetBtn.onclick = () => resetUser(user);
+        actions.appendChild(resetBtn);
+
+        card.appendChild(header);
+        card.appendChild(deckList);
+        card.appendChild(actions);
+        return card;
+      }
+
+      function renderDeckRow(deck) {
+        const row = document.createElement("div");
+        row.className = "deck-row";
+
+        const meta = document.createElement("div");
+        meta.innerHTML = `<div class="deck-title">${deck.title}</div><div class="muted">${deck.answered} of ${deck.totalCards} answered</div>`;
+
+        const bar = document.createElement("div");
+        bar.className = "stacked-bar";
+        addChunk(bar, deck.categories?.Again || 0, deck.totalCards, "again");
+        addChunk(bar, deck.categories?.Hard || 0, deck.totalCards, "hard");
+        addChunk(bar, deck.categories?.Good || 0, deck.totalCards, "good");
+        addChunk(bar, deck.categories?.Easy || 0, deck.totalCards, "easy");
+        addChunk(bar, deck.unanswered || 0, deck.totalCards, "unanswered");
+
+        const pct = deck.totalCards ? Math.round((deck.answered / deck.totalCards) * 100) : 0;
+        const pctLabel = document.createElement("div");
+        pctLabel.className = "muted";
+        pctLabel.textContent = `${pct}% complete`;
+
+        const right = document.createElement("div");
+        right.className = "deck-meta";
+        right.appendChild(bar);
+        right.appendChild(pctLabel);
+
+        row.appendChild(meta);
+        row.appendChild(right);
+        return row;
+      }
+
+      function addChunk(container, value, total, key) {
+        if (!value || !total) return;
+        const span = document.createElement("span");
+        span.className = `chunk ${key}`;
+        span.style.width = `${(value / total) * 100}%`;
+        span.title = `${value} ${key}`;
+        container.appendChild(span);
+      }
+
+      async function resetUser(user) {
+        const confirmed = confirm(`Reset all progress for ${user.name || user.email}?`);
+        if (!confirmed) return;
+        statusText.textContent = `Resetting ${user.name || user.email}...`;
+        const res = await fetch(`/api/admin/users/${user.id}/reset`, { method: "POST" });
+        if (!res.ok) {
+          statusText.textContent = "Unable to reset progress.";
+          return;
+        }
+        await loadUsers();
+        statusText.textContent = "Progress reset.";
+      }
+    </script>
+  </body>
+</html>
