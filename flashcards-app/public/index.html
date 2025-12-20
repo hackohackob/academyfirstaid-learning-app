@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="/styles/new-common.css" />
     <link rel="stylesheet" href="/styles/index-new.css" />
     <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+    <link rel="icon" href="/favicon.ico" type="image/x-icon" />
   </head>
   <body>
     <div class="glow" aria-hidden="true"></div>
@@ -1002,6 +1003,13 @@
           }
           return;
         }
+        if (isTyping(e.target)) return;
+        const shortcutCategory = getShortcutCategory(e.code);
+        if (shortcutCategory) {
+          e.preventDefault();
+          void selectCategory(shortcutCategory);
+          return;
+        }
         if (e.code === "ArrowRight") move(1);
         if (e.code === "ArrowLeft") move(-1);
         if (e.code === "Space") {
@@ -1010,6 +1018,31 @@
             reveal();
           }
         }
+      }
+
+      function isTyping(el) {
+        if (!el) return false;
+        const tag = el.tagName;
+        return ["INPUT", "TEXTAREA", "SELECT"].includes(tag) || el.isContentEditable;
+      }
+
+      function getShortcutCategory(code) {
+        const map = {
+          Digit1: "Again",
+          Numpad1: "Again",
+          Digit2: "Hard",
+          Numpad2: "Hard",
+          Digit3: "Good",
+          Numpad3: "Good",
+          Digit4: "Easy",
+          Numpad4: "Easy",
+        };
+        const desired = map[code];
+        if (!desired) return null;
+        const match = categories.find((cat) => cat.toLowerCase() === desired.toLowerCase());
+        if (match) return match;
+        const fallbackIdx = ["Again", "Hard", "Good", "Easy"].indexOf(desired);
+        return fallbackIdx >= 0 ? categories[fallbackIdx] : null;
       }
 
       function openImageModal(url) {
