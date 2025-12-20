@@ -44,6 +44,8 @@ jobs:
           password: ${{ secrets.SSH_PASSWORD }}
           script: |
             cd /opt/academyfirstaid || exit 1
+            # Update docker-compose.yml with correct image name
+            sed -i 's|hackohackob/academyfirstaid|hackohackob1/academyfirstaid|g' docker-compose.yml || true
             docker-compose pull
             docker-compose up -d --remove-orphans
             docker system prune -f
