@@ -67,6 +67,28 @@ main {
   justify-content: flex-end;
 }
 
+.title-edit {
+  display: grid;
+  gap: 6px;
+  min-width: 230px;
+}
+
+.title-edit label {
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  margin-bottom: 0;
+}
+
+.title-edit input {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #0c1324;
+  color: var(--text);
+  font-size: 14px;
+}
+
 .card-list {
   display: grid;
   gap: 12px;

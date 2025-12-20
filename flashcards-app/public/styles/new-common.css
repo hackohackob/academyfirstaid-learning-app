@@ -76,16 +76,20 @@ header {
 
 .topbar {
   display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "brand account"
+    "select progress";
+  gap: 10px 16px;
   align-items: center;
-  padding: 14px 22px;
+  padding: 14px 18px;
 }
 
 .brand {
   display: flex;
   align-items: center;
   gap: 10px;
+  grid-area: brand;
 }
 
 .logo {
@@ -122,6 +126,7 @@ header {
   grid-template-columns: 1fr auto;
   align-items: center;
   gap: 6px;
+  width: 100%;
 }
 
 select {
@@ -181,6 +186,11 @@ select:focus-visible {
   padding: 8px 12px;
   font-weight: 600;
   width: fit-content;
+}
+
+#progressShort {
+  font-size: 14px;
+  line-height: 1.2;
 }
 
 .pill-small {
@@ -299,6 +309,8 @@ select:focus-visible {
 .select-block {
   display: grid;
   gap: 6px;
+  grid-area: select;
+  width: 100%;
 }
 
 .select-block label {
@@ -329,11 +341,131 @@ select:focus-visible {
   box-shadow: var(--shadow);
 }
 
+.progress-short {
+  grid-area: progress;
+  justify-self: end;
+}
+
+.user-area {
+  grid-area: account;
+  justify-self: end;
+  display: flex;
+  align-items: center;
+}
+
+.user-dropdown {
+  position: relative;
+}
+
+.avatar-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 6px 10px;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.user-caret {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.user-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  padding: 6px;
+  display: none;
+  min-width: 160px;
+  z-index: 6;
+}
+
+.user-dropdown.open .user-menu {
+  display: grid;
+  gap: 6px;
+}
+
+.menu-item {
+  width: 100%;
+  text-align: left;
+  background: var(--card-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.menu-item:hover {
+  border-color: var(--accent);
+  box-shadow: 0 10px 25px rgba(88, 197, 103, 0.2);
+}
+
 @media (max-width: 880px) {
   .topbar {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "brand account"
+      "select progress";
+    align-items: center;
+    gap: 8px 12px;
+    padding: 10px 12px;
+  }
+  .select-wrap {
+    min-width: 0;
+    width: 100%;
+    padding: 6px 10px;
+  }
+  select {
+    font-size: 13px;
+  }
+  .logo {
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+  }
+  .pill {
+    padding: 6px 9px;
+    font-size: 12px;
+  }
+  #progressShort {
+    font-size: 12px;
+  }
+  .btn {
+    padding: 8px 12px;
+    border-radius: 10px;
+    font-size: 14px;
+  }
+  .rate-btn {
+    width: 36px;
+    height: 36px;
+    font-size: 16px;
   }
   .controls {
     justify-content: flex-start;
+  }
+}
+
+@media (max-width: 520px) {
+  .topbar {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "brand"
+      "account"
+      "select"
+      "progress";
+  }
+  .user-area,
+  .progress-short {
+    justify-self: start;
   }
 }

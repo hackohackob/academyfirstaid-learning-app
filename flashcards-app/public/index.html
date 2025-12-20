@@ -25,6 +25,7 @@
             <!-- <div class="brand-sub">Adaptive learning deck</div> -->
           </div>
         </div>
+        <div id="userArea" class="user-area"></div>
         <div class="select-block">
           <!-- <label for="deckSelect">Current lesson</label> -->
           <div class="select-wrap">
@@ -32,9 +33,8 @@
             <span class="chevron">▾</span>
           </div>
         </div>
-        <div class="top-right">
+        <div class="progress-short">
           <div class="pill" id="progressShort">0 / 0</div>
-          <div id="userArea" class="user-area"></div>
         </div>
       </div>
     </header>
@@ -106,6 +106,14 @@
       </div>
     </div>
 
+    <div class="img-modal" id="imageModal" aria-hidden="true">
+      <div class="img-modal-content">
+        <button class="img-modal-close" id="imageModalClose" type="button" aria-label="Close image preview">✕</button>
+        <img id="modalImage" alt="Expanded card image" />
+        <div class="img-modal-hint">Click outside the image or press Esc to close</div>
+      </div>
+    </div>
+
     <div class="auth-panel" id="authPanel">
       <div class="auth-card">
         <h2 id="authTitle">Login</h2>
@@ -155,6 +163,9 @@
       const sessionMeta = document.getElementById("sessionMeta");
       const imageFrame = document.getElementById("imageFrame");
       const answerImageFrame = document.getElementById("answerImageFrame");
+      const imageModal = document.getElementById("imageModal");
+      const modalImage = document.getElementById("modalImage");
+      const imageModalClose = document.getElementById("imageModalClose");
       const emptyState = document.getElementById("emptyState");
       const reportPanel = document.getElementById("reportPanel");
       const reportGrid = document.getElementById("reportGrid");
@@ -162,7 +173,11 @@
       const reportClose = document.getElementById("reportClose");
       const reportLegend = document.getElementById("reportLegend");
 
+      const ALL_DECK_VALUE = "all";
+      const DEFAULT_CATEGORIES = ["Again", "Hard", "Good", "Easy"];
+
       let deck = null;
+      let deckList = [];
       let allCards = [];
       let cards = [];
       let index = 0;
@@ -176,6 +191,12 @@
       let currentUser = null;
       let authMode = "login";
       let reportData = [];
+      let history = [];
+      let historyIndex = -1;
+      let seenThisSession = new Set();
+      let activeUserMenu = null;
+
+      document.addEventListener("click", closeUserMenu);
 
       init();
 
@@ -191,6 +212,10 @@
         reportPanel.addEventListener("click", (e) => {
           if (e.target === reportPanel) closeReports();
         });
+        imageModal.addEventListener("click", (e) => {
+          if (e.target === imageModal) closeImageModal();
+        });
+        imageModalClose.addEventListener("click", closeImageModal);
         window.addEventListener("keydown", handleKeys);
         await loadMe();
         renderUserArea();
@@ -208,38 +233,134 @@
           return;
         }
         const data = await res.json();
+        deckList = data.decks || [];
         deckSelect.innerHTML = "";
-        data.decks.forEach((d, i) => {
-          const opt = document.createElement("option");
-          opt.value = d.id;
-          opt.textContent = d.title;
-          if (i === 0) opt.selected = true;
-          deckSelect.appendChild(opt);
-        });
+        addDeckOption(ALL_DECK_VALUE, "All lessons");
+        deckList.forEach((d, i) => addDeckOption(d.id, d.title, i === 0));
         deckSelect.onchange = () => loadDeck(deckSelect.value);
-        if (data.decks[0]) await loadDeck(data.decks[0].id);
+        const initialValue = deckList[0] ? deckList[0].id : ALL_DECK_VALUE;
+        deckSelect.value = String(initialValue);
+        await loadDeck(deckSelect.value);
+      }
+
+      function addDeckOption(value, label, selected = false) {
+        const opt = document.createElement("option");
+        opt.value = String(value);
+        opt.textContent = label;
+        if (selected) opt.selected = true;
+        deckSelect.appendChild(opt);
       }
 
       async function loadDeck(id) {
+        if (id === ALL_DECK_VALUE) {
+          await loadAllDecks();
+          return;
+        }
         const res = await fetch(`/api/decks/${id}`);
+        if (!res.ok) {
+          showAuthPrompt();
+          return;
+        }
         const data = await res.json();
+        const cardList = (data.cards || []).map((c) => ({
+          ...c,
+          deckId: c.deckId || data.id,
+          deckTitle: c.deckTitle || data.title,
+        }));
+        setupSession({
+          deckInfo: { id: data.id, title: data.title },
+          cardList,
+          progress: data.progress || {},
+          ratingsMap: data.ratings || {},
+          categoryList: data.categories || DEFAULT_CATEGORIES,
+        });
+      }
+
+      async function loadAllDecks() {
+        const meta = deckList.length ? deckList : [];
+        if (!meta.length) {
+          showNoDecks();
+          return;
+        }
+        const details = await Promise.all(
+          meta.map(async (d) => {
+            const res = await fetch(`/api/decks/${d.id}`);
+            if (!res.ok) return null;
+            return res.json();
+          })
+        );
+        const validDecks = details.filter(Boolean);
+        if (!validDecks.length) {
+          showNoDecks();
+          return;
+        }
+        const combinedProgress = {};
+        const combinedRatings = {};
+        const combinedCards = [];
+        validDecks.forEach((d) => {
+          (d.cards || []).forEach((c) =>
+            combinedCards.push({
+              ...c,
+              deckId: c.deckId || d.id,
+              deckTitle: c.deckTitle || d.title,
+            })
+          );
+          Object.entries(d.progress || {}).forEach(([key, value]) => {
+            combinedProgress[key] = value;
+          });
+          Object.entries(d.ratings || {}).forEach(([key, value]) => {
+            combinedRatings[key] = value;
+          });
+        });
+        setupSession({
+          deckInfo: { id: ALL_DECK_VALUE, title: "All lessons" },
+          cardList: combinedCards,
+          progress: combinedProgress,
+          ratingsMap: combinedRatings,
+          categoryList: validDecks[0]?.categories || DEFAULT_CATEGORIES,
+        });
+      }
+
+      function setupSession({ deckInfo, cardList, progress = {}, ratingsMap = {}, categoryList = DEFAULT_CATEGORIES }) {
+        deck = deckInfo;
         emptyState.style.display = "none";
-        deck = data;
-        allCards = shuffle(data.cards);
+        allCards = shuffle(cardList);
         cards = [...allCards];
-        categories = data.categories;
-        progressMap = data.progress || {};
+        categories = categoryList && categoryList.length ? categoryList : DEFAULT_CATEGORIES;
+        progressMap = progress || {};
         images = {};
         answerImages = {};
-        ratings = data.ratings || {};
+        ratings = ratingsMap || {};
         cards.forEach((c) => {
           if (c.image) images[String(c.id)] = c.image;
           if (c.answerImage) answerImages[String(c.id)] = c.answerImage;
         });
         index = 0;
         activeFilters = new Set();
+        resetHistory();
+        seenThisSession = new Set();
         renderCategories();
-        renderCard();
+        const firstCard = pickNextCard();
+        if (firstCard) {
+          showCard(firstCard.id, { addToHistory: true });
+        } else {
+          renderCard();
+        }
+      }
+
+      function showNoDecks() {
+        questionEl.textContent = "No lessons available.";
+        answerEl.textContent = "";
+        pillRow.innerHTML = "";
+        controls.innerHTML = "";
+        progressEl.textContent = "";
+        ratingUp.classList.remove("selected");
+        ratingDown.classList.remove("selected");
+        progressFill.style.width = "0%";
+        sessionMeta.textContent = "Add a deck to begin studying.";
+        emptyState.style.display = "block";
+        deckBadge.textContent = "";
+        deckBadge.style.display = "none";
       }
 
       function renderCategories() {
@@ -272,6 +393,8 @@
       function renderCard() {
         renderPills();
         renderProgress();
+        deckBadge.textContent = "";
+        deckBadge.style.display = "none";
         if (!cards.length) {
           questionEl.textContent = activeFilters.size ? "No cards match the selected difficulties." : "No cards.";
           answerEl.textContent = "";
@@ -288,6 +411,11 @@
         }
         if (!cards[index]) index = 0;
         const card = cards[index];
+        const badgeTitle = card.deckTitle || deck?.title || "";
+        if (badgeTitle) {
+          deckBadge.textContent = badgeTitle;
+          deckBadge.style.display = "inline-block";
+        }
         questionEl.textContent = card.question;
         answerEl.textContent = showAnswer ? card.answer : "Press reveal to view the answer.";
         const current = progressMap[String(card.id)];
@@ -336,11 +464,97 @@
         return counts;
       }
 
-      function move(step) {
-        if (!cards.length) return;
-        index = (index + step + cards.length) % cards.length;
+      function resetHistory() {
+        history = [];
+        historyIndex = -1;
+      }
+
+      function showCard(cardId, { addToHistory = false } = {}) {
+        const idx = cards.findIndex((c) => c.id === cardId);
+        if (idx < 0) return false;
+        index = idx;
         showAnswer = false;
         renderCard();
+        seenThisSession.add(cardId);
+        if (addToHistory) {
+          history = history.slice(0, historyIndex + 1);
+          history.push(cardId);
+          historyIndex = history.length - 1;
+        }
+        return true;
+      }
+
+      function pickNextCard() {
+        if (!cards.length) return null;
+        const currentId = cards[index] ? cards[index].id : null;
+        const unanswered = cards.filter((c) => !progressMap[String(c.id)]);
+        if (unanswered.length) return chooseFresh(unanswered, currentId);
+
+        const buckets = { Again: [], Hard: [], Good: [], Easy: [] };
+        cards.forEach((card) => {
+          const cat = progressMap[String(card.id)];
+          if (buckets[cat]) buckets[cat].push(card);
+        });
+
+        // Bias toward tougher cards once everything has been answered.
+        const weightedBuckets = [
+          { cat: "Again", weight: 50 },
+          { cat: "Hard", weight: 30 },
+          { cat: "Good", weight: 20 },
+          { cat: "Easy", weight: 10 },
+        ].filter((entry) => buckets[entry.cat].length);
+
+        if (!weightedBuckets.length) return chooseFresh(cards, currentId);
+
+        const totalWeight = weightedBuckets.reduce((sum, entry) => sum + entry.weight, 0);
+        let roll = Math.random() * totalWeight;
+        let chosenCat = weightedBuckets[weightedBuckets.length - 1].cat;
+        for (const entry of weightedBuckets) {
+          if (roll <= entry.weight) {
+            chosenCat = entry.cat;
+            break;
+          }
+          roll -= entry.weight;
+        }
+        const pool = buckets[chosenCat];
+        if (!pool || !pool.length) return chooseFresh(cards, currentId);
+        return chooseFresh(pool, currentId);
+      }
+
+      function randomItem(list) {
+        if (!list.length) return null;
+        return list[Math.floor(Math.random() * list.length)];
+      }
+
+      function chooseFresh(list, excludeId = null) {
+        if (!list.length) return null;
+        const filtered = excludeId === null ? list : list.filter((c) => c.id !== excludeId);
+        const pool = filtered.length ? filtered : list; // allow repeat if only one option
+        const unseen = pool.filter((c) => !seenThisSession.has(c.id));
+        if (unseen.length) return randomItem(unseen);
+        return randomItem(pool);
+      }
+
+      function move(step) {
+        if (!cards.length) return;
+        if (step === -1) {
+          const prevId = history[historyIndex - 1];
+          if (prevId !== undefined && cards.some((c) => c.id === prevId)) {
+            historyIndex -= 1;
+            showCard(prevId);
+          }
+          return;
+        }
+
+        const forwardId = history[historyIndex + 1];
+        if (forwardId !== undefined && cards.some((c) => c.id === forwardId)) {
+          historyIndex += 1;
+          showCard(forwardId);
+          return;
+        }
+
+        const nextCard = pickNextCard();
+        if (nextCard) showCard(nextCard.id, { addToHistory: true });
       }
 
       function toggleFilter(cat) {
@@ -360,23 +574,31 @@
           const selected = activeFilters;
           cards = allCards.filter((card) => selected.has(progressMap[String(card.id)]));
         }
-        if (currentId) {
-          const foundIndex = cards.findIndex((c) => c.id === currentId);
-          index = foundIndex >= 0 ? foundIndex : 0;
-        } else {
-          index = 0;
-        }
         showAnswer = false;
-        renderCard();
+        const stillHasCurrent = currentId && cards.some((c) => c.id === currentId);
+        if (stillHasCurrent) {
+          index = cards.findIndex((c) => c.id === currentId);
+          renderCard();
+          return;
+        }
+        resetHistory();
+        seenThisSession = new Set();
+        const nextCard = pickNextCard();
+        if (nextCard) {
+          showCard(nextCard.id, { addToHistory: true });
+        } else {
+          renderCard();
+        }
       }
 
       async function selectCategory(cat) {
         if (!cards[index]) return;
         const card = cards[index];
         const key = String(card.id);
+        const targetDeckId = card.deckId || deck?.id;
         progressMap[key] = cat;
         applyFilters({ preserveIndex: true });
-        await fetch(`/api/decks/${deck.id}/progress`, {
+        await fetch(`/api/decks/${targetDeckId}/progress`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ cardId: card.id, category: cat }),
@@ -423,6 +645,7 @@
         img.src = url;
         img.alt = "Card image";
         img.className = "question-img";
+        img.addEventListener("click", () => openImageModal(url));
         frame.appendChild(img);
       }
 
@@ -440,9 +663,10 @@
         const card = cards[index];
         const key = String(card.id);
         const newRating = ratings[key] === choice ? null : choice;
+        const targetDeckId = card.deckId || deck?.id;
         ratings[key] = newRating;
         renderRating();
-        await fetch(`/api/decks/${deck.id}/rating`, {
+        await fetch(`/api/decks/${targetDeckId}/rating`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ cardId: card.id, rating: newRating }),
@@ -461,6 +685,7 @@
 
       function renderUserArea() {
         userArea.innerHTML = "";
+        activeUserMenu = null;
         if (!currentUser) {
           const loginBtn = document.createElement("button");
           loginBtn.textContent = "Login";
@@ -473,30 +698,73 @@
           userArea.appendChild(loginBtn);
           userArea.appendChild(regBtn);
         } else {
+          const dropdown = document.createElement("div");
+          dropdown.className = "user-dropdown";
+          dropdown.addEventListener("click", (e) => e.stopPropagation());
+
+          const trigger = document.createElement("button");
+          trigger.type = "button";
+          trigger.className = "avatar-btn";
+          trigger.title = `${currentUser.name || currentUser.email} (${currentUser.email})`;
+
           const avatar = document.createElement("div");
           avatar.className = "avatar";
           avatar.textContent = initials(currentUser.name || currentUser.email);
-          avatar.title = `${currentUser.name} (${currentUser.email})`;
-          avatar.style.cursor = "pointer";
-          avatar.onclick = openReports;
-          const reportBtn = document.createElement("button");
-          reportBtn.className = "btn ghost";
-          reportBtn.textContent = "Reports";
-          reportBtn.onclick = openReports;
+
+          const caret = document.createElement("span");
+          caret.className = "user-caret";
+          caret.textContent = "▾";
+
+          trigger.appendChild(avatar);
+          trigger.appendChild(caret);
+
+          const menu = document.createElement("div");
+          menu.className = "user-menu";
+          menu.addEventListener("click", (e) => e.stopPropagation());
+
+          const addMenuItem = ({ label, onClick, href }) => {
+            const el = document.createElement(href ? "a" : "button");
+            el.className = "menu-item";
+            el.textContent = label;
+            if (href) {
+              el.href = href;
+              el.onclick = () => closeUserMenu();
+            } else if (onClick) {
+              el.type = "button";
+              el.onclick = () => {
+                onClick();
+                closeUserMenu();
+              };
+            }
+            menu.appendChild(el);
+          };
+
           if (currentUser.is_admin) {
-            const adminBtn = document.createElement("a");
-            adminBtn.className = "btn";
-            adminBtn.textContent = "Admin";
-            adminBtn.href = "/admin.html";
-            userArea.appendChild(adminBtn);
+            addMenuItem({ label: "Admin", href: "/admin.html" });
           }
-          userArea.appendChild(reportBtn);
-          const logoutBtn = document.createElement("button");
-          logoutBtn.className = "btn";
-          logoutBtn.textContent = "Logout";
-          logoutBtn.onclick = logout;
-          userArea.appendChild(avatar);
-          userArea.appendChild(logoutBtn);
+          addMenuItem({ label: "Reports", onClick: openReports });
+          addMenuItem({ label: "Logout", onClick: logout });
+
+          trigger.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const isOpen = dropdown.classList.contains("open");
+            closeUserMenu();
+            if (!isOpen) {
+              dropdown.classList.add("open");
+              activeUserMenu = dropdown;
+            }
+          });
+
+          dropdown.appendChild(trigger);
+          dropdown.appendChild(menu);
+          userArea.appendChild(dropdown);
+        }
+      }
+
+      function closeUserMenu() {
+        if (activeUserMenu) {
+          activeUserMenu.classList.remove("open");
+          activeUserMenu = null;
         }
       }
 
@@ -726,8 +994,11 @@
       }
 
       function handleKeys(e) {
-        if (authPanel.style.display === "flex" || reportPanel.classList.contains("open")) {
-          if (e.code === "Escape") closeReports();
+        if (authPanel.style.display === "flex" || reportPanel.classList.contains("open") || imageModal.classList.contains("open")) {
+          if (e.code === "Escape") {
+            closeReports();
+            closeImageModal();
+          }
           return;
         }
         if (e.code === "ArrowRight") move(1);
@@ -738,6 +1009,19 @@
             reveal();
           }
         }
+      }
+
+      function openImageModal(url) {
+        if (!url) return;
+        modalImage.src = url;
+        imageModal.classList.add("open");
+        imageModal.setAttribute("aria-hidden", "false");
+      }
+
+      function closeImageModal() {
+        imageModal.classList.remove("open");
+        imageModal.setAttribute("aria-hidden", "true");
+        modalImage.src = "";
       }
     </script>
   </body>

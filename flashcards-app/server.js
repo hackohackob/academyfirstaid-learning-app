@@ -131,11 +131,13 @@ function initDb() {
   migrateProgressHistory();
   migrateDeckIdsToInt();
   migrateAnswerImages();
+  ensureDefaultAdmin();
   const existingDecks = getDecksFromDb();
   if (existingDecks.length === 0) {
     seedFromCsv();
+  } else {
+    syncNewCsvDecks(existingDecks);
   }
-  ensureDefaultAdmin();
 }
 
 function getDecksFromDb() {
@@ -147,27 +149,46 @@ function seedFromCsv() {
   if (!fs.existsSync(QUESTIONS_DIR)) return;
   const files = fs.readdirSync(QUESTIONS_DIR).filter((f) => f.toLowerCase().endsWith(".csv"));
   files.forEach((file) => {
-    const slug = path.basename(file, path.extname(file));
-    const title = slug.replace(/[-_]+/g, " ");
-    runSql(`INSERT OR IGNORE INTO decks (slug, title, filename) VALUES (${q(slug)}, ${q(title)}, ${q(file)})`);
-    const deckRow = runQuery(`SELECT id FROM decks WHERE slug = ${q(slug)} LIMIT 1`)[0];
-    if (!deckRow) return;
-    const deckDbId = deckRow.id;
-    const cards = parseCsvQuestions(path.join(QUESTIONS_DIR, file));
-    const imageCache = new Map();
-    const values = cards
-      .map((c) => {
-        const questionImage = c.imageUrl ? downloadImageFromUrl(c.imageUrl, slug, imageCache) : null;
-        const answerImage = c.answerImageUrl ? downloadImageFromUrl(c.answerImageUrl, `${slug}-answer`, imageCache) : null;
-        return `(${q(deckDbId)}, ${q(c.question)}, ${q(c.answer)}, ${questionImage ? q(questionImage) : "NULL"}, ${
-          answerImage ? q(answerImage) : "NULL"
-        })`;
-      })
-      .join(",");
-    if (values) {
-      runSql(`INSERT OR IGNORE INTO cards (deck_id, question, answer, image, answer_image) VALUES ${values}`);
-    }
+    importCsvDeck(file);
   });
+}
+
+function syncNewCsvDecks(existingDecks = []) {
+  if (!fs.existsSync(QUESTIONS_DIR)) return;
+  const files = fs.readdirSync(QUESTIONS_DIR).filter((f) => f.toLowerCase().endsWith(".csv"));
+  const knownSlugs = new Set(existingDecks.map((d) => String(d.slug || "").toLowerCase()));
+  const knownFilenames = new Set(existingDecks.map((d) => String(d.filename || "").toLowerCase()));
+
+  files.forEach((file) => {
+    const slug = path.basename(file, path.extname(file)).toLowerCase();
+    if (knownSlugs.has(slug) || knownFilenames.has(file.toLowerCase())) return;
+    importCsvDeck(file);
+    knownSlugs.add(slug);
+    knownFilenames.add(file.toLowerCase());
+  });
+}
+
+function importCsvDeck(file) {
+  const slug = path.basename(file, path.extname(file));
+  const title = slug.replace(/[-_]+/g, " ");
+  runSql(`INSERT OR IGNORE INTO decks (slug, title, filename) VALUES (${q(slug)}, ${q(title)}, ${q(file)})`);
+  const deckRow = runQuery(`SELECT id FROM decks WHERE slug = ${q(slug)} LIMIT 1`)[0];
+  if (!deckRow) return;
+  const deckDbId = deckRow.id;
+  const cards = parseCsvQuestions(path.join(QUESTIONS_DIR, file));
+  const imageCache = new Map();
+  const values = cards
+    .map((c) => {
+      const questionImage = c.imageUrl ? downloadImageFromUrl(c.imageUrl, slug, imageCache) : null;
+      const answerImage = c.answerImageUrl ? downloadImageFromUrl(c.answerImageUrl, `${slug}-answer`, imageCache) : null;
+      return `(${q(deckDbId)}, ${q(c.question)}, ${q(c.answer)}, ${questionImage ? q(questionImage) : "NULL"}, ${
+        answerImage ? q(answerImage) : "NULL"
+      })`;
+    })
+    .join(",");
+  if (values) {
+    runSql(`INSERT OR IGNORE INTO cards (deck_id, question, answer, image, answer_image) VALUES ${values}`);
+  }
 }
 
 function migrateProgressRatingsToCardIds() {
@@ -434,6 +455,8 @@ function getDeck(deckId) {
       answer: c.answer,
       image: c.image ? `/media/${c.image}` : null,
       answerImage: c.answer_image ? `/media/${c.answer_image}` : null,
+      deckId: deckRow.id,
+      deckTitle: deckRow.title,
     };
   });
   return { ...deckRow, cards: enriched };
@@ -619,6 +642,8 @@ function createServer() {
       if (!deck) return sendJson(res, 404, { error: "Deck not found" }, origin);
       const body = await parseBody(req);
       if (!body || !Array.isArray(body.cards)) return sendJson(res, 400, { error: "cards array required" }, origin);
+      const newTitle = typeof body.title === "string" ? body.title.trim() : deck.title;
+      if (!newTitle) return sendJson(res, 400, { error: "title is required" }, origin);
 
       const existing = runQuery(`SELECT id, question, answer, image, answer_image FROM cards WHERE deck_id = ${q(deckId)}`);
       const existingById = new Map(existing.map((c) => [c.id, c]));
@@ -679,7 +704,7 @@ function createServer() {
         });
       }
 
-      const stmts = [`BEGIN`];
+      const stmts = [`BEGIN`, `UPDATE decks SET title = ${q(newTitle)} WHERE id = ${q(deckId)}`];
       if (updateStatements.length) stmts.push(...updateStatements);
       if (insertValues.length)
         stmts.push(`INSERT INTO cards (deck_id, question, answer, image, answer_image) VALUES ${insertValues.join(",")}`);
@@ -694,7 +719,7 @@ function createServer() {
 
       writeDeckCsv(deckId, rows, deck.filename);
       cleanupUnusedMedia();
-      return sendJson(res, 200, { ok: true }, origin);
+      return sendJson(res, 200, { ok: true, title: newTitle }, origin);
     }
 
     if (req.method === "POST" && pathParts[0] === "api" && pathParts[1] === "decks" && pathParts[2] && pathParts[3] === "rating") {

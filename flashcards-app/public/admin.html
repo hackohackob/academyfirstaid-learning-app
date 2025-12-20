@@ -27,6 +27,10 @@
           <select id="deckSelect"></select>
           <span class="chevron">▾</span>
         </div>
+        <div class="title-edit">
+          <label for="deckTitle">Lesson title</label>
+          <input id="deckTitle" type="text" placeholder="Enter lesson title" />
+        </div>
         <div class="controls">
           <a href="/index.html" class="btn ghost">Open learner view</a>
           <button id="addCard" class="btn">Add Card</button>
@@ -71,6 +75,7 @@
 
     <script>
       const deckSelect = document.getElementById("deckSelect");
+      const deckTitleInput = document.getElementById("deckTitle");
       const cardsEl = document.getElementById("cards");
       const statusEl = document.getElementById("status");
       const addBtn = document.getElementById("addCard");
@@ -82,6 +87,7 @@
       const statEmpty = document.getElementById("statEmpty");
 
       let deckId = null;
+      let deckTitle = "";
       let cards = [];
 
       init();
@@ -89,6 +95,7 @@
       async function init() {
         await loadDecks();
         deckSelect.onchange = () => loadDeck(deckSelect.value);
+        deckTitleInput.oninput = (e) => (deckTitle = e.target.value);
         addBtn.onclick = addCard;
         addInlineBtn.onclick = addCard;
         saveBtn.onclick = save;
@@ -112,7 +119,13 @@
       async function loadDeck(id) {
         deckId = id;
         const res = await fetch(`/api/decks/${id}`);
+        if (!res.ok) {
+          statusEl.textContent = "Unable to load deck.";
+          return;
+        }
         const data = await res.json();
+        deckTitle = data.title || "";
+        deckTitleInput.value = deckTitle;
         cards = data.cards.map((c) => ({
           ...c,
           id: c.id,
@@ -310,7 +323,14 @@
 
       async function save() {
         statusEl.textContent = "Saving...";
+        const title = (deckTitle || deckTitleInput.value || "").trim();
+        if (!title) {
+          statusEl.textContent = "Deck title is required.";
+          return;
+        }
+        deckTitle = title;
         const payload = {
+          title,
           cards: cards.map((c) => ({
             id: c.id,
             question: c.question,
@@ -332,7 +352,12 @@
           statusEl.textContent = "Save failed";
           return;
         }
+        const result = await res.json().catch(() => ({}));
         statusEl.textContent = "Saved";
+        deckTitle = result.title || deckTitle;
+        deckTitleInput.value = deckTitle;
+        const option = Array.from(deckSelect.options).find((opt) => opt.value === String(deckId));
+        if (option) option.textContent = deckTitle;
         await loadDeck(deckId);
       }
 
