@@ -41,7 +41,7 @@ jobs:
         with:
           host: hackohackob.com
           username: hacko
-          password: ${{ secrets.SSH_PASSWORD }}
+          key: ${{ secrets.SSH_KEY }}
           script: |
             cd /opt/academyfirstaid || exit 1
             docker-compose pull
