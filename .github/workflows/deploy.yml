@@ -7,7 +7,7 @@ on:
       - main
 
 env:
-  DOCKER_IMAGE: hackohackob/academyfirstaid
+  DOCKER_IMAGE: hackohackob1/academyfirstaid
   DOCKER_TAG: latest
 
 jobs:
@@ -24,7 +24,7 @@ jobs:
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
+          username: hackohackob1
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build and push Docker image
