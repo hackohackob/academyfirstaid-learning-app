@@ -48,9 +48,13 @@ jobs:
             sed -i 's|hackohackob/academyfirstaid|hackohackob1/academyfirstaid|g' docker-compose.yml || true
             # Ensure required directories exist
             mkdir -p flashcards-app/data questions
+            # Stop and remove existing containers to avoid ContainerConfig errors
+            docker-compose down || true
+            # Remove any orphaned containers that might cause issues
+            docker-compose rm -f || true
             # Pull and start containers
             docker-compose pull
-            docker-compose up -d --remove-orphans
+            docker-compose up -d --force-recreate --remove-orphans
             # Wait a moment for container to start
             sleep 5
             # Check container status
