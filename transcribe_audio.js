@@ -101,6 +101,7 @@ function getAllChunkFiles() {
     const subdirs = fs
       .readdirSync(AUDIO_DIR, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
+      .filter((entry) => entry.name.toLowerCase() !== "processed")
       .map((entry) => entry.name)
       .sort();
 

@@ -73,9 +73,27 @@ function collectSingles(targetBase, groupedBases) {
   return singles;
 }
 
+function stripPrefix(baseName) {
+  const prefixes = [
+    "anatomiya-i-fiziologiya-na-choveka-",
+    "anatomiya-i-fitsiologiya-na-choveka-",
+    "anatomiya-i-fiziologiya-",
+    "anatomiya-i-fitsiologiya-",
+  ];
+  const lowerBase = baseName.toLowerCase();
+  for (const prefix of prefixes) {
+    const index = lowerBase.indexOf(prefix);
+    if (index !== -1) {
+      return baseName.substring(0, index) + baseName.substring(index + prefix.length);
+    }
+  }
+  return baseName;
+}
+
 function combineGroup(base, parts) {
   const sorted = parts.sort((a, b) => a.part - b.part);
-  const outputPath = path.join(OUTPUT_DIR, `${base}.txt`);
+  const outputBase = stripPrefix(base);
+  const outputPath = path.join(OUTPUT_DIR, `${outputBase}.txt`);
   const chunks = sorted.map((item) => fs.readFileSync(item.fullPath, "utf8"));
   const combined = chunks.join("\n\n").trimEnd() + "\n";
   fs.writeFileSync(outputPath, combined, "utf8");
@@ -84,7 +102,8 @@ function combineGroup(base, parts) {
 }
 
 function copySingle(single) {
-  const outputPath = path.join(OUTPUT_DIR, `${single.base}.txt`);
+  const outputBase = stripPrefix(single.base);
+  const outputPath = path.join(OUTPUT_DIR, `${outputBase}.txt`);
   fs.copyFileSync(single.fullPath, outputPath);
   console.log(`✓ Copied single transcript -> ${path.relative(ROOT, outputPath)}`);
 }
