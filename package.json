@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "main": "extract_audio.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "parse": "node 01.extract_audio.js && node 02.compress_audio.js && node 03.chunk_audio.js && node 04.transcribe_audio.js && node 05.combine_transcripts.js",
+    "clear": "node 06.clear-up.js"
   },
   "keywords": [],
   "author": "",

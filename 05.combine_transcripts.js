@@ -75,6 +75,7 @@ function collectSingles(targetBase, groupedBases) {
 
 function stripPrefix(baseName) {
   const prefixes = [
+    "ortopediya-i-travmatologiya-",
     "anatomiya-i-fiziologiya-na-choveka-",
     "anatomiya-i-fitsiologiya-na-choveka-",
     "anatomiya-i-fiziologiya-",
