@@ -29,9 +29,18 @@
         <div id="userArea" class="user-area"></div>
         <div class="select-block">
           <!-- <label for="deckSelect">Current lesson</label> -->
-          <div class="select-wrap">
-            <select id="deckSelect" aria-label="Deck selector"></select>
-            <span class="chevron">▾</span>
+          <div class="select-wrap deck-select-wrap">
+            <button type="button" id="deckSelectBtn" class="deck-select-btn" aria-label="Deck selector">
+              <span id="deckSelectText">All lessons</span>
+              <span class="chevron">▾</span>
+            </button>
+            <div id="deckSelectDropdown" class="deck-select-dropdown" aria-hidden="true">
+              <div class="deck-select-item" data-deck-id="all">
+                <input type="checkbox" id="deck-all" class="deck-checkbox">
+                <label for="deck-all" class="deck-label">All</label>
+              </div>
+              <div id="deckSelectList" class="deck-select-list"></div>
+            </div>
           </div>
         </div>
         <div class="progress-short">
@@ -135,7 +144,12 @@
     </div>
 
     <script>
-      const deckSelect = document.getElementById("deckSelect");
+      const deckSelectBtn = document.getElementById("deckSelectBtn");
+      const deckSelectText = document.getElementById("deckSelectText");
+      const deckSelectDropdown = document.getElementById("deckSelectDropdown");
+      const deckSelectList = document.getElementById("deckSelectList");
+      const deckAllCheckbox = document.getElementById("deck-all");
+      let selectedDecks = new Set();
       const questionEl = document.getElementById("question");
       const answerEl = document.getElementById("answer");
       const progressEl = document.getElementById("progress");
@@ -198,6 +212,11 @@
       let activeUserMenu = null;
 
       document.addEventListener("click", closeUserMenu);
+      document.addEventListener("click", (e) => {
+        if (!deckSelectBtn.contains(e.target) && !deckSelectDropdown.contains(e.target)) {
+          closeDeckDropdown();
+        }
+      });
 
       init();
 
@@ -217,6 +236,44 @@
           if (e.target === imageModal) closeImageModal();
         });
         imageModalClose.addEventListener("click", closeImageModal);
+        deckSelectBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          toggleDeckDropdown();
+        });
+        
+        // Setup All checkbox handler
+        deckAllCheckbox.addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (deckAllCheckbox.checked) {
+            selectAllDecks();
+          } else {
+            deselectAllDecks();
+          }
+        });
+        
+        // Setup All label and item click handler
+        const allItem = deckAllCheckbox.closest(".deck-select-item");
+        if (allItem) {
+          const allLabel = allItem.querySelector(".deck-label");
+          
+          // Label click - select all
+          if (allLabel) {
+            allLabel.addEventListener("click", (e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              selectAllDecks();
+            });
+          }
+          
+          // Item click (anywhere except checkbox) - select all
+          allItem.addEventListener("click", (e) => {
+            // Don't interfere if clicking directly on checkbox
+            if (e.target === deckAllCheckbox) return;
+            e.stopPropagation();
+            selectAllDecks();
+          });
+        }
+        
         window.addEventListener("keydown", handleKeys);
         await loadMe();
         renderUserArea();
@@ -227,6 +284,25 @@
         await loadDecks();
       }
 
+      function toggleDeckDropdown() {
+        const isOpen = deckSelectDropdown.getAttribute("aria-hidden") === "false";
+        if (isOpen) {
+          closeDeckDropdown();
+        } else {
+          openDeckDropdown();
+        }
+      }
+
+      function openDeckDropdown() {
+        deckSelectDropdown.setAttribute("aria-hidden", "false");
+        deckSelectDropdown.classList.add("open");
+      }
+
+      function closeDeckDropdown() {
+        deckSelectDropdown.setAttribute("aria-hidden", "true");
+        deckSelectDropdown.classList.remove("open");
+      }
+
       async function loadDecks() {
         const res = await fetch("/api/decks");
         if (!res.ok) {
@@ -235,21 +311,205 @@
         }
         const data = await res.json();
         deckList = data.decks || [];
-        deckSelect.innerHTML = "";
-        addDeckOption(ALL_DECK_VALUE, "All lessons");
-        deckList.forEach((d, i) => addDeckOption(d.id, d.title, i === 0));
-        deckSelect.onchange = () => loadDeck(deckSelect.value);
-        const initialValue = deckList[0] ? deckList[0].id : ALL_DECK_VALUE;
-        deckSelect.value = String(initialValue);
-        await loadDeck(deckSelect.value);
+        renderDeckDropdown();
+        // Initially select all decks
+        selectedDecks.clear();
+        deckList.forEach((d) => selectedDecks.add(String(d.id)));
+        deckAllCheckbox.checked = true;
+        updateDeckSelectText();
+        await loadSelectedDecks();
       }
 
-      function addDeckOption(value, label, selected = false) {
-        const opt = document.createElement("option");
-        opt.value = String(value);
-        opt.textContent = label;
-        if (selected) opt.selected = true;
-        deckSelect.appendChild(opt);
+      function renderDeckDropdown() {
+        deckSelectList.innerHTML = "";
+        deckList.forEach((deck) => {
+          const item = document.createElement("div");
+          item.className = "deck-select-item";
+          item.dataset.deckId = String(deck.id);
+          
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.id = `deck-${deck.id}`;
+          checkbox.className = "deck-checkbox";
+          checkbox.checked = selectedDecks.has(String(deck.id));
+          
+          const label = document.createElement("label");
+          label.htmlFor = `deck-${deck.id}`;
+          label.className = "deck-label";
+          label.textContent = deck.title;
+          
+          // Checkbox click - toggle selection
+          checkbox.addEventListener("click", (e) => {
+            e.stopPropagation();
+            toggleDeckSelection(String(deck.id));
+          });
+          
+          // Label or item click - select only this deck (single selection)
+          label.addEventListener("click", (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            selectOnlyDeck(String(deck.id));
+          });
+          
+          // Item click (anywhere except checkbox) - select only this deck
+          item.addEventListener("click", (e) => {
+            // Don't interfere if clicking directly on checkbox
+            if (e.target === checkbox) return;
+            e.stopPropagation();
+            selectOnlyDeck(String(deck.id));
+          });
+          
+          item.appendChild(checkbox);
+          item.appendChild(label);
+          deckSelectList.appendChild(item);
+        });
+        
+        // Update All checkbox state
+        deckAllCheckbox.checked = selectedDecks.size === deckList.length;
+      }
+
+      function toggleDeckSelection(deckId) {
+        if (selectedDecks.has(deckId)) {
+          selectedDecks.delete(deckId);
+        } else {
+          selectedDecks.add(deckId);
+        }
+        updateAllCheckboxState();
+        updateDeckSelectText();
+        updateCheckboxStates();
+        loadSelectedDecks();
+      }
+
+      function selectOnlyDeck(deckId) {
+        selectedDecks.clear();
+        selectedDecks.add(deckId);
+        updateAllCheckboxState();
+        updateDeckSelectText();
+        updateCheckboxStates();
+        loadSelectedDecks();
+      }
+
+      function selectAllDecks() {
+        selectedDecks.clear();
+        deckList.forEach((d) => selectedDecks.add(String(d.id)));
+        updateAllCheckboxState();
+        updateDeckSelectText();
+        updateCheckboxStates();
+        loadSelectedDecks();
+      }
+
+      function deselectAllDecks() {
+        selectedDecks.clear();
+        updateAllCheckboxState();
+        updateDeckSelectText();
+        updateCheckboxStates();
+        if (selectedDecks.size === 0) {
+          // If nothing selected, show empty state
+          showNoDecks();
+        } else {
+          loadSelectedDecks();
+        }
+      }
+
+      function selectAllDecks() {
+        selectedDecks.clear();
+        deckList.forEach((d) => selectedDecks.add(String(d.id)));
+        updateAllCheckboxState();
+        updateDeckSelectText();
+        updateCheckboxStates();
+        loadSelectedDecks();
+      }
+
+      function deselectAllDecks() {
+        selectedDecks.clear();
+        updateAllCheckboxState();
+        updateDeckSelectText();
+        updateCheckboxStates();
+        if (selectedDecks.size === 0) {
+          // If nothing selected, show empty state
+          showNoDecks();
+        } else {
+          loadSelectedDecks();
+        }
+      }
+
+      function updateAllCheckboxState() {
+        deckAllCheckbox.checked = selectedDecks.size === deckList.length;
+      }
+
+      function updateCheckboxStates() {
+        deckSelectList.querySelectorAll(".deck-checkbox").forEach((checkbox) => {
+          const deckId = checkbox.id.replace("deck-", "");
+          checkbox.checked = selectedDecks.has(deckId);
+        });
+      }
+
+      function updateDeckSelectText() {
+        if (selectedDecks.size === 0) {
+          deckSelectText.textContent = "No lessons";
+        } else if (selectedDecks.size === deckList.length) {
+          deckSelectText.textContent = "All";
+        } else if (selectedDecks.size === 1) {
+          const deckId = Array.from(selectedDecks)[0];
+          const deck = deckList.find((d) => String(d.id) === deckId);
+          deckSelectText.textContent = deck ? deck.title : "1 lesson";
+        } else {
+          deckSelectText.textContent = `${selectedDecks.size} lessons`;
+        }
+      }
+
+      async function loadSelectedDecks() {
+        if (selectedDecks.size === 0) {
+          showNoDecks();
+          return;
+        }
+        if (selectedDecks.size === deckList.length) {
+          await loadAllDecks();
+          return;
+        }
+        const selectedIds = Array.from(selectedDecks);
+        await loadMultipleDecks(selectedIds);
+      }
+
+      async function loadMultipleDecks(deckIds) {
+        const details = await Promise.all(
+          deckIds.map(async (id) => {
+            const res = await fetch(`/api/decks/${id}`);
+            if (!res.ok) return null;
+            return res.json();
+          })
+        );
+        const validDecks = details.filter(Boolean);
+        if (!validDecks.length) {
+          showNoDecks();
+          return;
+        }
+        const combinedProgress = {};
+        const combinedRatings = {};
+        const combinedCards = [];
+        validDecks.forEach((d) => {
+          (d.cards || []).forEach((c) =>
+            combinedCards.push({
+              ...c,
+              deckId: c.deckId || d.id,
+              deckTitle: c.deckTitle || d.title,
+            })
+          );
+          Object.entries(d.progress || {}).forEach(([key, value]) => {
+            combinedProgress[key] = value;
+          });
+          Object.entries(d.ratings || {}).forEach(([key, value]) => {
+            combinedRatings[key] = value;
+          });
+        });
+        const titles = validDecks.map((d) => d.title).join(", ");
+        setupSession({
+          deckInfo: { id: "multiple", title: titles },
+          cardList: combinedCards,
+          progress: combinedProgress,
+          ratingsMap: combinedRatings,
+          categoryList: validDecks[0]?.categories || DEFAULT_CATEGORIES,
+        });
       }
 
       async function loadDeck(id) {
@@ -1001,6 +1261,10 @@
             closeReports();
             closeImageModal();
           }
+          return;
+        }
+        if (e.code === "Escape" && deckSelectDropdown.classList.contains("open")) {
+          closeDeckDropdown();
           return;
         }
         if (isTyping(e.target)) return;

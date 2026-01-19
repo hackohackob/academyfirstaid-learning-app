@@ -179,8 +179,8 @@ function importCsvDeck(file) {
   const imageCache = new Map();
   const values = cards
     .map((c) => {
-      const questionImage = c.imageUrl ? downloadImageFromUrl(c.imageUrl, slug, imageCache) : null;
-      const answerImage = c.answerImageUrl ? downloadImageFromUrl(c.answerImageUrl, `${slug}-answer`, imageCache) : null;
+      const questionImage = c.imageUrl ? processImage(c.imageUrl, slug, imageCache) : null;
+      const answerImage = c.answerImageUrl ? processImage(c.answerImageUrl, `${slug}-answer`, imageCache) : null;
       return `(${q(deckDbId)}, ${q(c.question)}, ${q(c.answer)}, ${questionImage ? q(questionImage) : "NULL"}, ${
         answerImage ? q(answerImage) : "NULL"
       })`;
@@ -955,6 +955,7 @@ function escapeCsv(value) {
 }
 
 function saveDataUrl(dataUrl, deckId) {
+  ensureDataDirs();
   const match = /^data:([a-zA-Z0-9/+.-]+);base64,(.+)$/.exec(dataUrl);
   if (!match) throw new Error("Invalid image data");
   const mime = match[1];
@@ -970,6 +971,28 @@ function mimeToExt(mime) {
   if (mime === "image/jpeg") return "jpg";
   if (mime === "image/webp") return "webp";
   return "bin";
+}
+
+function processImage(imageData, deckSlug, cache = new Map()) {
+  const trimmed = (imageData || "").trim();
+  if (!trimmed) return null;
+  
+  // Check if it's a base64 data URI
+  if (trimmed.startsWith("data:image/")) {
+    if (cache.has(trimmed)) return cache.get(trimmed);
+    try {
+      const filename = saveDataUrl(trimmed, deckSlug);
+      cache.set(trimmed, filename);
+      return filename;
+    } catch (error) {
+      console.error(`Error saving base64 image: ${error.message}`);
+      cache.set(trimmed, null);
+      return null;
+    }
+  }
+  
+  // Otherwise, treat it as a URL
+  return downloadImageFromUrl(trimmed, deckSlug, cache);
 }
 
 function downloadImageFromUrl(url, deckSlug, cache = new Map()) {
