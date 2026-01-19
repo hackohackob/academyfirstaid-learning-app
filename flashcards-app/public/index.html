@@ -303,6 +303,28 @@
         deckSelectDropdown.classList.remove("open");
       }
 
+      function saveSelectedDecks() {
+        try {
+          const deckIds = Array.from(selectedDecks);
+          localStorage.setItem("selectedDecks", JSON.stringify(deckIds));
+        } catch (e) {
+          console.warn("Failed to save selected decks to localStorage", e);
+        }
+      }
+
+      function loadSelectedDecksFromStorage() {
+        try {
+          const saved = localStorage.getItem("selectedDecks");
+          if (saved) {
+            const deckIds = JSON.parse(saved);
+            return new Set(deckIds.map(String));
+          }
+        } catch (e) {
+          console.warn("Failed to load selected decks from localStorage", e);
+        }
+        return null;
+      }
+
       async function loadDecks() {
         const res = await fetch("/api/decks");
         if (!res.ok) {
@@ -312,11 +334,30 @@
         const data = await res.json();
         deckList = data.decks || [];
         renderDeckDropdown();
-        // Initially select all decks
-        selectedDecks.clear();
-        deckList.forEach((d) => selectedDecks.add(String(d.id)));
-        deckAllCheckbox.checked = true;
+        
+        // Try to load saved selection from localStorage
+        const savedSelection = loadSelectedDecksFromStorage();
+        if (savedSelection && savedSelection.size > 0) {
+          // Only restore decks that still exist
+          selectedDecks.clear();
+          deckList.forEach((d) => {
+            if (savedSelection.has(String(d.id))) {
+              selectedDecks.add(String(d.id));
+            }
+          });
+          // If no saved decks match, fall back to all decks
+          if (selectedDecks.size === 0) {
+            deckList.forEach((d) => selectedDecks.add(String(d.id)));
+          }
+        } else {
+          // Initially select all decks if no saved selection
+          selectedDecks.clear();
+          deckList.forEach((d) => selectedDecks.add(String(d.id)));
+        }
+        
+        updateAllCheckboxState();
         updateDeckSelectText();
+        updateCheckboxStates();
         await loadSelectedDecks();
       }
 
@@ -377,6 +418,7 @@
         updateAllCheckboxState();
         updateDeckSelectText();
         updateCheckboxStates();
+        saveSelectedDecks();
         loadSelectedDecks();
       }
 
@@ -386,6 +428,7 @@
         updateAllCheckboxState();
         updateDeckSelectText();
         updateCheckboxStates();
+        saveSelectedDecks();
         loadSelectedDecks();
       }
 
@@ -395,6 +438,7 @@
         updateAllCheckboxState();
         updateDeckSelectText();
         updateCheckboxStates();
+        saveSelectedDecks();
         loadSelectedDecks();
       }
 
@@ -403,28 +447,7 @@
         updateAllCheckboxState();
         updateDeckSelectText();
         updateCheckboxStates();
-        if (selectedDecks.size === 0) {
-          // If nothing selected, show empty state
-          showNoDecks();
-        } else {
-          loadSelectedDecks();
-        }
-      }
-
-      function selectAllDecks() {
-        selectedDecks.clear();
-        deckList.forEach((d) => selectedDecks.add(String(d.id)));
-        updateAllCheckboxState();
-        updateDeckSelectText();
-        updateCheckboxStates();
-        loadSelectedDecks();
-      }
-
-      function deselectAllDecks() {
-        selectedDecks.clear();
-        updateAllCheckboxState();
-        updateDeckSelectText();
-        updateCheckboxStates();
+        saveSelectedDecks();
         if (selectedDecks.size === 0) {
           // If nothing selected, show empty state
           showNoDecks();

@@ -182,7 +182,7 @@ header {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 10px;
+  padding: 10px 12px;
   border-radius: 8px;
   cursor: pointer;
   transition: background 120ms ease;
@@ -193,11 +193,15 @@ header {
 }
 
 .deck-checkbox {
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
   cursor: pointer;
   accent-color: var(--accent);
   flex-shrink: 0;
+  margin: 4px;
+  padding: 0;
+  min-width: 22px;
+  min-height: 22px;
 }
 
 .deck-label {

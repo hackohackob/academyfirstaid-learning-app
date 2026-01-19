@@ -22,3 +22,5 @@ questions/
 compressed_chunked/
 compressed/
 transcripts_combined/
+for-upload/processed/
+for-upload/processed-xlsx/
