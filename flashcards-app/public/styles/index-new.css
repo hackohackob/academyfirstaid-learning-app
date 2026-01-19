@@ -486,7 +486,10 @@ main {
     padding: 16px;
   }
   .card {
-    padding: 40px;
+    padding: 12px;
+  }
+  .card:first-child {
+    padding-bottom: 40px;
   }
   .question-img {
     max-width: 100%;
