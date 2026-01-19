@@ -394,9 +394,19 @@ select:focus-visible {
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 16px;
+  padding-bottom: 70px;
   display: grid;
   gap: 12px;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
+  position: relative;
+}
+
+.card-rating {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  display: flex;
+  gap: 8px;
 }
 
 .card-header {
@@ -558,6 +568,13 @@ select:focus-visible {
     width: 36px;
     height: 36px;
     font-size: 16px;
+  }
+  .card {
+    padding-bottom: 36px;
+  }
+  .card-rating {
+    bottom: 12px;
+    right: 12px;
   }
   .controls {
     justify-content: flex-start;

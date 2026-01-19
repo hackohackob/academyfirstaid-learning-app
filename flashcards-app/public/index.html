@@ -65,15 +65,15 @@
             <article class="card">
               <div class="card-header">
                 <span class="" id="deckBadge"></span>
-                <div class="rating">
-                  <button id="ratingUp" class="rate-btn" title="Thumbs up">👍</button>
-                  <button id="ratingDown" class="rate-btn" title="Thumbs down">👎</button>
-                </div>
               </div>
               <div id="imageFrame"></div>
               <div class="card-title" id="question">Loading…</div>
               <div class="status-row">
                 <span class="muted" id="status">Stay focused</span>
+              </div>
+              <div class="card-rating">
+                <button id="ratingUp" class="rate-btn" title="Thumbs up">👍</button>
+                <button id="ratingDown" class="rate-btn" title="Thumbs down">👎</button>
               </div>
             </article>
             <article class="card answer-card">
@@ -89,7 +89,7 @@
           <div class="category-row" id="controls"></div>
           <div class="nav-row">
             <div class="rating muted" id="progress"></div>
-            <div class="rating">
+            <div class="nav-buttons">
               <button class="btn" id="prevBtn" type="button">Previous</button>
               <button class="btn primary" id="nextBtn" type="button">Next</button>
             </div>
@@ -703,7 +703,7 @@
         questionEl.textContent = card.question;
         answerEl.textContent = showAnswer ? card.answer : "Press reveal to view the answer.";
         const current = progressMap[String(card.id)];
-        statusEl.textContent = current ? `You marked this as ${current}` : "Not yet rated";
+        statusEl.textContent = current ? `You marked this as ${current}` : "";
         [...controls.children].forEach((btn) => {
           btn.classList.toggle("selected", btn.dataset.name === current);
         });

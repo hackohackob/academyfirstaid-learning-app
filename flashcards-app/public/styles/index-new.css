@@ -92,6 +92,13 @@ main {
 #imageFrame,
 #answerImageFrame{
   text-align: center;
+  overflow: hidden;
+}
+
+#imageFrame img,
+#answerImageFrame img {
+  max-width: 100%;
+  height: auto;
 }
 
 #answerImageFrame {
@@ -100,14 +107,15 @@ main {
 }
 
 .question-img {
-  /* width: 100%; */
+  width: 100%;
+  max-width: 100%;
   border-radius: 14px;
   border: 1px solid var(--border);
   background: var(--card-2);
-  object-fit: cover;
+  object-fit: contain;
   max-height: 280px;
   cursor: zoom-in;
-  max-width: 100%;
+  height: auto;
 }
 
 .empty-img {
@@ -201,6 +209,13 @@ main {
   gap: 10px;
   justify-content: space-between;
   margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.nav-buttons {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
@@ -405,7 +420,7 @@ main {
   display: none;
   align-items: center;
   justify-content: center;
-  padding: 28px;
+  padding: 0;
   z-index: 20;
 }
 
@@ -472,5 +487,15 @@ main {
   }
   .card {
     padding: 14px;
+  }
+  .question-img {
+    max-width: 100%;
+    width: 100%;
+    height: auto;
+  }
+  #imageFrame,
+  #answerImageFrame {
+    max-width: 100%;
+    overflow: hidden;
   }
 }

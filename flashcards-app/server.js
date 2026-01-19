@@ -11,7 +11,38 @@ const DATA_DIR = path.join(__dirname, "data");
 const MEDIA_DIR = path.join(DATA_DIR, "media");
 const DB_FILE = path.join(DATA_DIR, "app.db");
 
+logInfo("Server configuration", {
+  questionsDir: QUESTIONS_DIR,
+  dataDir: DATA_DIR,
+  mediaDir: MEDIA_DIR,
+  dbFile: DB_FILE,
+});
+
 const CATEGORY_LABELS = ["Again", "Hard", "Good", "Easy"];
+
+// Logging utilities
+function log(level, message, data = {}) {
+  const timestamp = new Date().toISOString();
+  const prefix = `[${timestamp}] [${level.toUpperCase()}]`;
+  if (Object.keys(data).length > 0) {
+    console.log(`${prefix} ${message}`, data);
+  } else {
+    console.log(`${prefix} ${message}`);
+  }
+}
+
+function logInfo(message, data) {
+  log("info", message, data);
+}
+
+function logError(message, error) {
+  const errorData = error instanceof Error ? { message: error.message, stack: error.stack } : error;
+  log("error", message, errorData);
+}
+
+function logWarn(message, data) {
+  log("warn", message, data);
+}
 
 function ensureDataDirs() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -20,7 +51,12 @@ function ensureDataDirs() {
 
 function runSql(sql) {
   ensureDataDirs();
-  execSync(`sqlite3 ${shellq(DB_FILE)} "${sql.replace(/"/g, '""')}"`);
+  try {
+    execSync(`sqlite3 ${shellq(DB_FILE)} "${sql.replace(/"/g, '""')}"`);
+  } catch (error) {
+    logError("SQL execution failed", { sql: sql.substring(0, 200), error });
+    throw error;
+  }
 }
 
 function runSqlBatch(statements) {
@@ -51,9 +87,14 @@ function verifyPassword(password, stored) {
 
 function runQuery(sql) {
   ensureDataDirs();
-  const out = execSync(`sqlite3 -json ${shellq(DB_FILE)} "${sql.replace(/"/g, '""')}"`, { encoding: "utf8" });
-  if (!out.trim()) return [];
-  return JSON.parse(out);
+  try {
+    const out = execSync(`sqlite3 -json ${shellq(DB_FILE)} "${sql.replace(/"/g, '""')}"`, { encoding: "utf8" });
+    if (!out.trim()) return [];
+    return JSON.parse(out);
+  } catch (error) {
+    logError("SQL query failed", { sql: sql.substring(0, 200), error });
+    throw error;
+  }
 }
 
 function shellq(value) {
@@ -70,6 +111,7 @@ function tableHasColumn(table, column) {
 }
 
 function initDb() {
+  logInfo("Initializing database", { dbFile: DB_FILE });
   ensureDataDirs();
   runSql(
     `
@@ -127,6 +169,7 @@ function initDb() {
     `
   );
 
+  logInfo("Running database migrations");
   migrateProgressRatingsToCardIds();
   migrateProgressHistory();
   migrateDeckIdsToInt();
@@ -134,10 +177,13 @@ function initDb() {
   ensureDefaultAdmin();
   const existingDecks = getDecksFromDb();
   if (existingDecks.length === 0) {
+    logInfo("No decks found, seeding from CSV");
     seedFromCsv();
   } else {
+    logInfo("Syncing new CSV decks", { existingDecks: existingDecks.length });
     syncNewCsvDecks(existingDecks);
   }
+  logInfo("Database initialization complete", { decks: getDecksFromDb().length });
 }
 
 function getDecksFromDb() {
@@ -146,8 +192,12 @@ function getDecksFromDb() {
 }
 
 function seedFromCsv() {
-  if (!fs.existsSync(QUESTIONS_DIR)) return;
+  if (!fs.existsSync(QUESTIONS_DIR)) {
+    logWarn("Questions directory not found", { path: QUESTIONS_DIR });
+    return;
+  }
   const files = fs.readdirSync(QUESTIONS_DIR).filter((f) => f.toLowerCase().endsWith(".csv"));
+  logInfo("Seeding decks from CSV", { fileCount: files.length });
   files.forEach((file) => {
     importCsvDeck(file);
   });
@@ -159,35 +209,50 @@ function syncNewCsvDecks(existingDecks = []) {
   const knownSlugs = new Set(existingDecks.map((d) => String(d.slug || "").toLowerCase()));
   const knownFilenames = new Set(existingDecks.map((d) => String(d.filename || "").toLowerCase()));
 
+  let importedCount = 0;
   files.forEach((file) => {
     const slug = path.basename(file, path.extname(file)).toLowerCase();
     if (knownSlugs.has(slug) || knownFilenames.has(file.toLowerCase())) return;
     importCsvDeck(file);
+    importedCount++;
     knownSlugs.add(slug);
     knownFilenames.add(file.toLowerCase());
   });
+  if (importedCount > 0) {
+    logInfo("Imported new CSV decks", { count: importedCount });
+  }
 }
 
 function importCsvDeck(file) {
-  const slug = path.basename(file, path.extname(file));
-  const title = slug.replace(/[-_]+/g, " ");
-  runSql(`INSERT OR IGNORE INTO decks (slug, title, filename) VALUES (${q(slug)}, ${q(title)}, ${q(file)})`);
-  const deckRow = runQuery(`SELECT id FROM decks WHERE slug = ${q(slug)} LIMIT 1`)[0];
-  if (!deckRow) return;
-  const deckDbId = deckRow.id;
-  const cards = parseCsvQuestions(path.join(QUESTIONS_DIR, file));
-  const imageCache = new Map();
-  const values = cards
-    .map((c) => {
-      const questionImage = c.imageUrl ? processImage(c.imageUrl, slug, imageCache) : null;
-      const answerImage = c.answerImageUrl ? processImage(c.answerImageUrl, `${slug}-answer`, imageCache) : null;
-      return `(${q(deckDbId)}, ${q(c.question)}, ${q(c.answer)}, ${questionImage ? q(questionImage) : "NULL"}, ${
-        answerImage ? q(answerImage) : "NULL"
-      })`;
-    })
-    .join(",");
-  if (values) {
-    runSql(`INSERT OR IGNORE INTO cards (deck_id, question, answer, image, answer_image) VALUES ${values}`);
+  try {
+    const slug = path.basename(file, path.extname(file));
+    const title = slug.replace(/[-_]+/g, " ");
+    logInfo("Importing CSV deck", { file, slug, title });
+    runSql(`INSERT OR IGNORE INTO decks (slug, title, filename) VALUES (${q(slug)}, ${q(title)}, ${q(file)})`);
+    const deckRow = runQuery(`SELECT id FROM decks WHERE slug = ${q(slug)} LIMIT 1`)[0];
+    if (!deckRow) {
+      logWarn("Failed to create deck", { file, slug });
+      return;
+    }
+    const deckDbId = deckRow.id;
+    const cards = parseCsvQuestions(path.join(QUESTIONS_DIR, file));
+    logInfo("Parsed CSV cards", { file, cardCount: cards.length });
+    const imageCache = new Map();
+    const values = cards
+      .map((c) => {
+        const questionImage = c.imageUrl ? processImage(c.imageUrl, slug, imageCache) : null;
+        const answerImage = c.answerImageUrl ? processImage(c.answerImageUrl, `${slug}-answer`, imageCache) : null;
+        return `(${q(deckDbId)}, ${q(c.question)}, ${q(c.answer)}, ${questionImage ? q(questionImage) : "NULL"}, ${
+          answerImage ? q(answerImage) : "NULL"
+        })`;
+      })
+      .join(",");
+    if (values) {
+      runSql(`INSERT OR IGNORE INTO cards (deck_id, question, answer, image, answer_image) VALUES ${values}`);
+      logInfo("Imported cards into database", { file, cardCount: cards.length });
+    }
+  } catch (error) {
+    logError("Failed to import CSV deck", { file, error });
   }
 }
 
@@ -196,7 +261,11 @@ function migrateProgressRatingsToCardIds() {
   const hasCardKeyRatings = tableHasColumn("ratings", "card_key");
   const hasUserProgress = tableHasColumn("progress", "user_id");
   const hasUserRatings = tableHasColumn("ratings", "user_id");
-  if (!hasCardKeyProgress && !hasCardKeyRatings && hasUserProgress && hasUserRatings) return;
+  if (!hasCardKeyProgress && !hasCardKeyRatings && hasUserProgress && hasUserRatings) {
+    logInfo("Progress/Ratings migration not needed");
+    return;
+  }
+  logInfo("Migrating progress/ratings to card IDs");
   const adminId = ensureDefaultAdmin();
   // Migrate progress
   if (hasCardKeyProgress) {
@@ -280,8 +349,10 @@ function migrateProgressHistory() {
   const hasId = tableHasColumn("progress", "id");
   if (hasCreatedAt && hasId) {
     runSql(`CREATE INDEX IF NOT EXISTS idx_progress_user_card_time ON progress(user_id, deck_id, card_id, created_at DESC)`);
+    logInfo("Progress history migration not needed");
     return;
   }
+  logInfo("Migrating progress history");
   runSqlBatch([
     `CREATE TABLE IF NOT EXISTS progress_new (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -305,7 +376,11 @@ function migrateDeckIdsToInt() {
   const deckInfo = runQuery(`PRAGMA table_info(decks)`);
   const hasSlug = deckInfo.some((c) => c.name === "slug");
   const idIsInt = deckInfo.some((c) => c.name === "id" && c.type && c.type.toLowerCase().includes("int"));
-  if (hasSlug && idIsInt) return;
+  if (hasSlug && idIsInt) {
+    logInfo("Deck IDs migration not needed");
+    return;
+  }
+  logInfo("Migrating deck IDs to integer");
 
   const cardInfo = runQuery(`PRAGMA table_info(cards)`);
   const hasAnswerImage = cardInfo.some((c) => c.name === "answer_image");
@@ -380,16 +455,25 @@ function migrateDeckIdsToInt() {
 }
 
 function migrateAnswerImages() {
-  if (tableHasColumn("cards", "answer_image")) return;
+  if (tableHasColumn("cards", "answer_image")) {
+    logInfo("Answer images migration not needed");
+    return;
+  }
+  logInfo("Adding answer_image column to cards table");
   runSql(`ALTER TABLE cards ADD COLUMN answer_image TEXT`);
 }
 
 function ensureDefaultAdmin() {
   const existing = runQuery(`SELECT id FROM users WHERE email = ${q("admin@example.com")} LIMIT 1`);
-  if (existing[0]) return existing[0].id;
+  if (existing[0]) {
+    logInfo("Default admin user exists", { id: existing[0].id });
+    return existing[0].id;
+  }
+  logInfo("Creating default admin user");
   const hash = hashPassword("admin123");
   runSql(`INSERT INTO users (email, name, password_hash, is_admin) VALUES (${q("admin@example.com")}, ${q("Admin")}, ${q(hash)}, 1)`);
   const inserted = runQuery(`SELECT id FROM users WHERE email = ${q("admin@example.com")} LIMIT 1`);
+  logInfo("Default admin user created", { id: inserted[0]?.id });
   return inserted[0]?.id;
 }
 
@@ -398,26 +482,34 @@ function listDecks() {
 }
 
 function parseCsvQuestions(filePath) {
-  const raw = fs.readFileSync(filePath, "utf8");
-  const lines = raw.split(/\r?\n/).filter(Boolean);
-  if (lines.length === 0) return [];
-  
-  // Auto-detect delimiter from header row
-  const header = lines[0];
-  const delimiter = header.includes(";") ? ";" : ",";
-  
-  const rows = [];
-  for (let i = 1; i < lines.length; i++) {
-    const cols = smartSplit(lines[i], delimiter);
-    if (cols.length < 2) continue;
-    rows.push({
-      question: cols[0].trim(),
-      answer: cols[1].trim(),
-      imageUrl: (cols[2] || "").trim() || null,
-      answerImageUrl: (cols[3] || "").trim() || null,
-    });
+  try {
+    const raw = fs.readFileSync(filePath, "utf8");
+    const lines = raw.split(/\r?\n/).filter(Boolean);
+    if (lines.length === 0) {
+      logWarn("Empty CSV file", { filePath });
+      return [];
+    }
+    
+    // Auto-detect delimiter from header row
+    const header = lines[0];
+    const delimiter = header.includes(";") ? ";" : ",";
+    
+    const rows = [];
+    for (let i = 1; i < lines.length; i++) {
+      const cols = smartSplit(lines[i], delimiter);
+      if (cols.length < 2) continue;
+      rows.push({
+        question: cols[0].trim(),
+        answer: cols[1].trim(),
+        imageUrl: (cols[2] || "").trim() || null,
+        answerImageUrl: (cols[3] || "").trim() || null,
+      });
+    }
+    return rows;
+  } catch (error) {
+    logError("Failed to parse CSV questions", { filePath, error });
+    return [];
   }
-  return rows;
 }
 
 // Basic CSV splitter that supports double-quoted values with commas.
@@ -529,10 +621,12 @@ function getAllUsersWithProgress() {
 }
 
 function resetUserProgress(userId) {
+  logInfo("Resetting user progress", { userId });
   runSqlBatch([
     `DELETE FROM progress WHERE user_id = ${q(userId)}`,
     `DELETE FROM ratings WHERE user_id = ${q(userId)}`,
   ]);
+  logInfo("User progress reset complete", { userId });
 }
 
 function getCorsHeaders(origin) {
@@ -636,25 +730,68 @@ function parseBody(req) {
 
 function createServer() {
   return http.createServer(async (req, res) => {
-    const url = new URL(req.url, "http://localhost");
-    const pathParts = url.pathname.split("/").filter(Boolean);
-    const auth = getAuth(req);
-    const origin = req.headers.origin;
+    const startTime = Date.now();
+    let statusCode = 200;
+    
+    try {
+      const url = new URL(req.url, "http://localhost");
+      const pathParts = url.pathname.split("/").filter(Boolean);
+      const auth = getAuth(req);
+      const origin = req.headers.origin;
+
+      // Log request
+      const logRequest = () => {
+        const duration = Date.now() - startTime;
+        const userInfo = auth.user ? `user=${auth.user.id}(${auth.user.email})` : "anonymous";
+        logInfo("HTTP Request", {
+          method: req.method,
+          path: url.pathname,
+          status: statusCode,
+          duration: `${duration}ms`,
+          user: userInfo,
+        });
+      };
+
+      // Wrap response methods to log response
+      const originalWriteHead = res.writeHead.bind(res);
+      res.writeHead = function(code, ...args) {
+        statusCode = code;
+        return originalWriteHead(code, ...args);
+      };
+
+      const originalEnd = res.end.bind(res);
+      res.end = function(...args) {
+        logRequest();
+        return originalEnd(...args);
+      };
 
     if (req.method === "GET" && url.pathname === "/api/decks") {
-      return sendJson(res, 200, { decks: listDecks() }, origin);
+      const decks = listDecks();
+      logInfo("List decks request", { count: decks.length });
+      return sendJson(res, 200, { decks }, origin);
     }
 
     if (req.method === "GET" && url.pathname === "/api/reports/progress") {
-      if (!auth.user) return sendJson(res, 401, { error: "Unauthorized" }, origin);
+      if (!auth.user) {
+        logWarn("Unauthorized progress report request");
+        return sendJson(res, 401, { error: "Unauthorized" }, origin);
+      }
       const report = getProgressReport(auth.user.id);
+      logInfo("Progress report generated", { userId: auth.user.id, deckCount: report.length });
       return sendJson(res, 200, { decks: report, generatedAt: nowSeconds() }, origin);
     }
 
     if (req.method === "GET" && pathParts[0] === "api" && pathParts[1] === "decks" && pathParts[2]) {
-      if (!auth.user) return sendJson(res, 401, { error: "Unauthorized" }, origin);
+      if (!auth.user) {
+        logWarn("Unauthorized deck request", { deckId: pathParts[2] });
+        return sendJson(res, 401, { error: "Unauthorized" }, origin);
+      }
       const deck = getDeck(pathParts[2]);
-      if (!deck) return sendJson(res, 404, { error: "Deck not found" }, origin);
+      if (!deck) {
+        logWarn("Deck not found", { deckId: pathParts[2] });
+        return sendJson(res, 404, { error: "Deck not found" }, origin);
+      }
+      logInfo("Deck retrieved", { deckId: pathParts[2], cardCount: deck.cards.length, userId: auth.user.id });
       const progressRows = runQuery(`
         SELECT card_id, category FROM (
           SELECT card_id, category,
@@ -670,26 +807,49 @@ function createServer() {
     }
 
     if (req.method === "POST" && pathParts[0] === "api" && pathParts[1] === "decks" && pathParts[2] && pathParts[3] === "progress") {
-      if (!auth.user) return sendJson(res, 401, { error: "Unauthorized" }, origin);
+      if (!auth.user) {
+        logWarn("Unauthorized progress update");
+        return sendJson(res, 401, { error: "Unauthorized" }, origin);
+      }
       const body = await parseBody(req);
       const { cardId, category } = body || {};
-      if (cardId === undefined || cardId === null) return sendJson(res, 400, { error: "cardId is required" }, origin);
-      if (!CATEGORY_LABELS.includes(category)) return sendJson(res, 400, { error: "Invalid category" }, origin);
+      if (cardId === undefined || cardId === null) {
+        logWarn("Invalid progress update - missing cardId", { body });
+        return sendJson(res, 400, { error: "cardId is required" }, origin);
+      }
+      if (!CATEGORY_LABELS.includes(category)) {
+        logWarn("Invalid progress update - invalid category", { cardId, category });
+        return sendJson(res, 400, { error: "Invalid category" }, origin);
+      }
       runSql(
         `INSERT INTO progress (user_id, card_id, deck_id, category) VALUES (${q(auth.user.id)}, ${q(cardId)}, ${q(pathParts[2])}, ${q(category)})`
       );
+      logInfo("Progress updated", { userId: auth.user.id, deckId: pathParts[2], cardId, category });
       return sendJson(res, 200, { ok: true }, origin);
     }
 
     if (req.method === "POST" && pathParts[0] === "api" && pathParts[1] === "admin" && pathParts[2] === "decks" && pathParts[3]) {
-      if (!auth.user || !auth.user.is_admin) return sendJson(res, 403, { error: "Admin required" }, origin);
+      if (!auth.user || !auth.user.is_admin) {
+        logWarn("Unauthorized admin deck update attempt", { userId: auth.user?.id, deckId: pathParts[3] });
+        return sendJson(res, 403, { error: "Admin required" }, origin);
+      }
       const deckId = pathParts[3];
       const deck = getDeck(deckId);
-      if (!deck) return sendJson(res, 404, { error: "Deck not found" }, origin);
+      if (!deck) {
+        logWarn("Admin deck update - deck not found", { deckId, userId: auth.user.id });
+        return sendJson(res, 404, { error: "Deck not found" }, origin);
+      }
       const body = await parseBody(req);
-      if (!body || !Array.isArray(body.cards)) return sendJson(res, 400, { error: "cards array required" }, origin);
+      if (!body || !Array.isArray(body.cards)) {
+        logWarn("Admin deck update - invalid body", { deckId, userId: auth.user.id });
+        return sendJson(res, 400, { error: "cards array required" }, origin);
+      }
       const newTitle = typeof body.title === "string" ? body.title.trim() : deck.title;
-      if (!newTitle) return sendJson(res, 400, { error: "title is required" }, origin);
+      if (!newTitle) {
+        logWarn("Admin deck update - missing title", { deckId, userId: auth.user.id });
+        return sendJson(res, 400, { error: "title is required" }, origin);
+      }
+      logInfo("Admin updating deck", { deckId, userId: auth.user.id, cardCount: body.cards.length, newTitle });
 
       const existing = runQuery(`SELECT id, question, answer, image, answer_image FROM cards WHERE deck_id = ${q(deckId)}`);
       const existingById = new Map(existing.map((c) => [c.id, c]));
@@ -765,6 +925,7 @@ function createServer() {
 
       writeDeckCsv(deckId, rows, deck.filename);
       cleanupUnusedMedia();
+      logInfo("Admin deck update complete", { deckId, userId: auth.user.id, cardCount: rows.length });
       return sendJson(res, 200, { ok: true, title: newTitle }, origin);
     }
 
@@ -775,10 +936,17 @@ function createServer() {
       pathParts[2] === "decks" &&
       pathParts[3]
     ) {
-      if (!auth.user || !auth.user.is_admin) return sendJson(res, 403, { error: "Admin required" }, origin);
+      if (!auth.user || !auth.user.is_admin) {
+        logWarn("Unauthorized admin deck deletion attempt", { userId: auth.user?.id, deckId: pathParts[3] });
+        return sendJson(res, 403, { error: "Admin required" }, origin);
+      }
       const deckId = pathParts[3];
       const deck = runQuery(`SELECT id, filename FROM decks WHERE id = ${q(deckId)} LIMIT 1`)[0];
-      if (!deck) return sendJson(res, 404, { error: "Deck not found" }, origin);
+      if (!deck) {
+        logWarn("Admin deck deletion - deck not found", { deckId, userId: auth.user.id });
+        return sendJson(res, 404, { error: "Deck not found" }, origin);
+      }
+      logInfo("Admin deleting deck", { deckId, userId: auth.user.id, filename: deck.filename });
       const statements = [
         "BEGIN",
         `DELETE FROM progress WHERE deck_id = ${q(deckId)}`,
@@ -790,9 +958,13 @@ function createServer() {
       runSqlBatch(statements);
       if (deck.filename) {
         const csvPath = path.join(QUESTIONS_DIR, deck.filename);
-        if (fs.existsSync(csvPath)) fs.unlinkSync(csvPath);
+        if (fs.existsSync(csvPath)) {
+          fs.unlinkSync(csvPath);
+          logInfo("Deleted CSV file", { path: csvPath });
+        }
       }
       cleanupUnusedMedia();
+      logInfo("Admin deck deletion complete", { deckId, userId: auth.user.id });
       return sendJson(res, 200, { ok: true }, origin);
     }
 
@@ -803,8 +975,12 @@ function createServer() {
       pathParts[2] === "users" &&
       pathParts.length === 3
     ) {
-      if (!auth.user || !auth.user.is_admin) return sendJson(res, 403, { error: "Admin required" }, origin);
+      if (!auth.user || !auth.user.is_admin) {
+        logWarn("Unauthorized admin users list request", { userId: auth.user?.id });
+        return sendJson(res, 403, { error: "Admin required" }, origin);
+      }
       const users = getAllUsersWithProgress();
+      logInfo("Admin users list requested", { userId: auth.user.id, userCount: users.length });
       return sendJson(res, 200, { users }, origin);
     }
 
@@ -816,27 +992,45 @@ function createServer() {
       pathParts[3] &&
       pathParts[4] === "reset"
     ) {
-      if (!auth.user || !auth.user.is_admin) return sendJson(res, 403, { error: "Admin required" }, origin);
+      if (!auth.user || !auth.user.is_admin) {
+        logWarn("Unauthorized admin user reset attempt", { userId: auth.user?.id, targetUserId: pathParts[3] });
+        return sendJson(res, 403, { error: "Admin required" }, origin);
+      }
       const userId = pathParts[3];
       const exists = runQuery(`SELECT id FROM users WHERE id = ${q(userId)} LIMIT 1`)[0];
-      if (!exists) return sendJson(res, 404, { error: "User not found" }, origin);
+      if (!exists) {
+        logWarn("Admin user reset - user not found", { targetUserId: userId, adminUserId: auth.user.id });
+        return sendJson(res, 404, { error: "User not found" }, origin);
+      }
+      logInfo("Admin resetting user progress", { targetUserId: userId, adminUserId: auth.user.id });
       resetUserProgress(userId);
       return sendJson(res, 200, { ok: true }, origin);
     }
 
     if (req.method === "POST" && pathParts[0] === "api" && pathParts[1] === "decks" && pathParts[2] && pathParts[3] === "rating") {
-      if (!auth.user) return sendJson(res, 401, { error: "Unauthorized" }, origin);
+      if (!auth.user) {
+        logWarn("Unauthorized rating update");
+        return sendJson(res, 401, { error: "Unauthorized" }, origin);
+      }
       const deckId = pathParts[2];
       const body = await parseBody(req);
       const { cardId, rating } = body || {};
-      if (cardId === undefined || cardId === null) return sendJson(res, 400, { error: "cardId is required" }, origin);
-      if (rating !== "up" && rating !== "down" && rating !== null) return sendJson(res, 400, { error: "rating must be up, down, or null" }, origin);
+      if (cardId === undefined || cardId === null) {
+        logWarn("Invalid rating update - missing cardId", { body });
+        return sendJson(res, 400, { error: "cardId is required" }, origin);
+      }
+      if (rating !== "up" && rating !== "down" && rating !== null) {
+        logWarn("Invalid rating update - invalid rating", { cardId, rating });
+        return sendJson(res, 400, { error: "rating must be up, down, or null" }, origin);
+      }
       if (rating === null) {
         runSql(`DELETE FROM ratings WHERE user_id = ${q(auth.user.id)} AND card_id = ${q(cardId)} AND deck_id = ${q(deckId)}`);
+        logInfo("Rating removed", { userId: auth.user.id, deckId, cardId });
       } else {
         runSql(
           `INSERT OR REPLACE INTO ratings (user_id, card_id, deck_id, rating) VALUES (${q(auth.user.id)}, ${q(cardId)}, ${q(deckId)}, ${q(rating)})`
         );
+        logInfo("Rating updated", { userId: auth.user.id, deckId, cardId, rating });
       }
       return sendJson(res, 200, { ok: true }, origin);
     }
@@ -844,32 +1038,53 @@ function createServer() {
     if (req.method === "POST" && url.pathname === "/api/auth/register") {
       const body = await parseBody(req);
       const { email, name, password } = body || {};
-      if (!email || !name || !password) return sendJson(res, 400, { error: "email, name, password required" }, origin);
+      if (!email || !name || !password) {
+        logWarn("Registration attempt with missing fields", { hasEmail: !!email, hasName: !!name, hasPassword: !!password });
+        return sendJson(res, 400, { error: "email, name, password required" }, origin);
+      }
       const exists = runQuery(`SELECT id FROM users WHERE email = ${q(email)} LIMIT 1`);
-      if (exists[0]) return sendJson(res, 400, { error: "Email already registered" }, origin);
+      if (exists[0]) {
+        logWarn("Registration attempt with existing email", { email });
+        return sendJson(res, 400, { error: "Email already registered" }, origin);
+      }
+      logInfo("User registration", { email, name });
       const hash = hashPassword(password);
       runSql(`INSERT INTO users (email, name, password_hash, is_admin) VALUES (${q(email)}, ${q(name)}, ${q(hash)}, 0)`);
       const user = runQuery(`SELECT id, email, name, is_admin FROM users WHERE email = ${q(email)} LIMIT 1`)[0];
       const token = createSession(user.id);
       setSessionCookie(res, token);
+      logInfo("User registered successfully", { userId: user.id, email });
       return sendJson(res, 200, { user }, origin);
     }
 
     if (req.method === "POST" && url.pathname === "/api/auth/login") {
       const body = await parseBody(req);
       const { email, password } = body || {};
-      if (!email || !password) return sendJson(res, 400, { error: "email and password required" }, origin);
+      if (!email || !password) {
+        logWarn("Login attempt with missing credentials", { hasEmail: !!email, hasPassword: !!password });
+        return sendJson(res, 400, { error: "email and password required" }, origin);
+      }
       const user = runQuery(`SELECT id, email, name, is_admin, password_hash FROM users WHERE email = ${q(email)} LIMIT 1`)[0];
-      if (!user || !verifyPassword(password, user.password_hash)) return sendJson(res, 401, { error: "Invalid credentials" }, origin);
+      if (!user || !verifyPassword(password, user.password_hash)) {
+        logWarn("Failed login attempt", { email });
+        return sendJson(res, 401, { error: "Invalid credentials" }, origin);
+      }
       const token = createSession(user.id);
       setSessionCookie(res, token);
       delete user.password_hash;
+      logInfo("User logged in", { userId: user.id, email, isAdmin: !!user.is_admin });
       return sendJson(res, 200, { user }, origin);
     }
 
     if (req.method === "POST" && url.pathname === "/api/auth/logout") {
       const cookies = parseCookies(req);
-      if (cookies.session) runSql(`DELETE FROM sessions WHERE token = ${q(cookies.session)}`);
+      if (cookies.session) {
+        const session = runQuery(`SELECT user_id FROM sessions WHERE token = ${q(cookies.session)} LIMIT 1`)[0];
+        runSql(`DELETE FROM sessions WHERE token = ${q(cookies.session)}`);
+        if (session) {
+          logInfo("User logged out", { userId: session.user_id });
+        }
+      }
       const headers = {
         "Set-Cookie": clearSessionCookie(),
         ...getCorsHeaders(origin),
@@ -879,7 +1094,10 @@ function createServer() {
     }
 
     if (req.method === "GET" && url.pathname === "/api/me") {
-      if (!auth.user) return sendJson(res, 401, { error: "Unauthorized" }, origin);
+      if (!auth.user) {
+        logWarn("Unauthorized /api/me request");
+        return sendJson(res, 401, { error: "Unauthorized" }, origin);
+      }
       return sendJson(res, 200, { user: auth.user }, origin);
     }
 
@@ -890,8 +1108,21 @@ function createServer() {
       return;
     }
 
-    if (serveStatic(req, res, url.pathname)) return;
-    res.writeHead(404).end("Not found");
+      if (serveStatic(req, res, url.pathname)) return;
+      statusCode = 404;
+      res.writeHead(404).end("Not found");
+    } catch (error) {
+      statusCode = 500;
+      logError("Request handler error", { 
+        method: req.method, 
+        url: req.url, 
+        error 
+      });
+      if (!res.headersSent) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Internal server error" }));
+      }
+    }
   });
 }
 
@@ -912,11 +1143,15 @@ function getAuth(req) {
   const session = runQuery(`SELECT user_id, expires_at FROM sessions WHERE token = ${q(token)} LIMIT 1`)[0];
   if (!session) return { user: null };
   if (session.expires_at < nowSeconds()) {
+    logInfo("Expired session deleted", { userId: session.user_id });
     runSql(`DELETE FROM sessions WHERE token = ${q(token)}`);
     return { user: null };
   }
   const user = runQuery(`SELECT id, email, name, is_admin FROM users WHERE id = ${q(session.user_id)} LIMIT 1`)[0];
-  if (!user) return { user: null };
+  if (!user) {
+    logWarn("Session exists but user not found", { userId: session.user_id });
+    return { user: null };
+  }
   return { user, token };
 }
 
@@ -924,6 +1159,7 @@ function createSession(userId) {
   const token = randomToken();
   const expires = nowSeconds() + 60 * 60 * 24 * 30; // 30 days
   runSql(`INSERT INTO sessions (token, user_id, expires_at) VALUES (${q(token)}, ${q(userId)}, ${expires})`);
+  logInfo("Session created", { userId, expires });
   return token;
 }
 
@@ -937,15 +1173,23 @@ function clearSessionCookie() {
 }
 
 function writeDeckCsv(deckId, rows, filename) {
-  if (!filename) return;
-  const filePath = path.join(QUESTIONS_DIR, filename);
-  const lines = ["Въпрос;Отговор;Изображение;Изображение на отговор"];
-  for (const r of rows) {
-    lines.push(
-      `${escapeCsv(r.question)};${escapeCsv(r.answer)};${escapeCsv(r.image || "")};${escapeCsv(r.answerImage || "")}`
-    );
+  if (!filename) {
+    logWarn("Cannot write CSV - no filename", { deckId });
+    return;
   }
-  fs.writeFileSync(filePath, lines.join("\n"), "utf8");
+  try {
+    const filePath = path.join(QUESTIONS_DIR, filename);
+    const lines = ["Въпрос;Отговор;Изображение;Изображение на отговор"];
+    for (const r of rows) {
+      lines.push(
+        `${escapeCsv(r.question)};${escapeCsv(r.answer)};${escapeCsv(r.image || "")};${escapeCsv(r.answerImage || "")}`
+      );
+    }
+    fs.writeFileSync(filePath, lines.join("\n"), "utf8");
+    logInfo("CSV file written", { deckId, filename, rowCount: rows.length });
+  } catch (error) {
+    logError("Failed to write CSV file", { deckId, filename, error });
+  }
 }
 
 function escapeCsv(value) {
@@ -957,13 +1201,22 @@ function escapeCsv(value) {
 function saveDataUrl(dataUrl, deckId) {
   ensureDataDirs();
   const match = /^data:([a-zA-Z0-9/+.-]+);base64,(.+)$/.exec(dataUrl);
-  if (!match) throw new Error("Invalid image data");
+  if (!match) {
+    logError("Invalid image data URL format", { deckId });
+    throw new Error("Invalid image data");
+  }
   const mime = match[1];
   const ext = mimeToExt(mime);
   const buffer = Buffer.from(match[2], "base64");
   const filename = `${deckId}-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-  fs.writeFileSync(path.join(MEDIA_DIR, filename), buffer);
-  return filename;
+  try {
+    fs.writeFileSync(path.join(MEDIA_DIR, filename), buffer);
+    logInfo("Image saved from data URL", { deckId, filename, size: buffer.length });
+    return filename;
+  } catch (error) {
+    logError("Failed to save image from data URL", { deckId, filename, error });
+    throw error;
+  }
 }
 
 function mimeToExt(mime) {
@@ -1013,15 +1266,20 @@ function downloadImageFromUrl(url, deckSlug, cache = new Map()) {
   const filePath = path.join(MEDIA_DIR, filename);
 
   try {
+    logInfo("Downloading image from URL", { url: trimmed, filename });
     execSync(`curl -L --silent --show-error ${shellq(trimmed)} -o ${shellq(filePath)}`);
     if (!fs.existsSync(filePath) || fs.statSync(filePath).size === 0) {
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      logWarn("Downloaded image is empty or missing", { url: trimmed, filename });
       cache.set(trimmed, null);
       return null;
     }
+    const size = fs.statSync(filePath).size;
+    logInfo("Image downloaded successfully", { url: trimmed, filename, size });
     cache.set(trimmed, filename);
     return filename;
-  } catch {
+  } catch (error) {
+    logError("Failed to download image", { url: trimmed, filename, error });
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     cache.set(trimmed, null);
     return null;
@@ -1029,19 +1287,32 @@ function downloadImageFromUrl(url, deckSlug, cache = new Map()) {
 }
 
 function cleanupUnusedMedia() {
-  const rows = runQuery("SELECT image, answer_image FROM cards WHERE image IS NOT NULL OR answer_image IS NOT NULL");
-  const used = new Set();
-  rows.forEach((row) => {
-    if (row.image) used.add(row.image);
-    if (row.answer_image) used.add(row.answer_image);
-  });
-  const files = fs.existsSync(MEDIA_DIR) ? fs.readdirSync(MEDIA_DIR) : [];
-  files.forEach((file) => {
-    if (!used.has(file)) {
-      const filePath = path.join(MEDIA_DIR, file);
-      fs.unlinkSync(filePath);
+  try {
+    const rows = runQuery("SELECT image, answer_image FROM cards WHERE image IS NOT NULL OR answer_image IS NOT NULL");
+    const used = new Set();
+    rows.forEach((row) => {
+      if (row.image) used.add(row.image);
+      if (row.answer_image) used.add(row.answer_image);
+    });
+    const files = fs.existsSync(MEDIA_DIR) ? fs.readdirSync(MEDIA_DIR) : [];
+    let deletedCount = 0;
+    files.forEach((file) => {
+      if (!used.has(file)) {
+        const filePath = path.join(MEDIA_DIR, file);
+        try {
+          fs.unlinkSync(filePath);
+          deletedCount++;
+        } catch (error) {
+          logError("Failed to delete unused media file", { file, error });
+        }
+      }
+    });
+    if (deletedCount > 0) {
+      logInfo("Cleaned up unused media files", { deletedCount, totalFiles: files.length });
     }
-  });
+  } catch (error) {
+    logError("Failed to cleanup unused media", { error });
+  }
 }
 
 initDb();
@@ -1050,7 +1321,17 @@ if (require.main === module) {
   const server = createServer();
   const port = process.env.PORT || 3000;
   server.listen(port, () => {
-    console.log(`Flashcards server running on http://localhost:${port}`);
+    logInfo("Flashcards server started", { port, nodeEnv: process.env.NODE_ENV || "development" });
+  });
+
+  // Log uncaught errors
+  process.on("uncaughtException", (error) => {
+    logError("Uncaught exception", error);
+    process.exit(1);
+  });
+
+  process.on("unhandledRejection", (reason, promise) => {
+    logError("Unhandled rejection", { reason, promise });
   });
 }
 
