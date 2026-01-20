@@ -325,6 +325,12 @@
         return null;
       }
 
+      function extractNumericPrefix(title) {
+        // Extract numeric prefix from title (e.g., "01-Lesson" -> 1, "10-Lesson" -> 10)
+        const match = String(title).match(/^0?(\d+)/);
+        return match ? parseInt(match[1], 10) : 9999; // Put non-numeric titles at the end
+      }
+
       async function loadDecks() {
         const res = await fetch("/api/decks");
         if (!res.ok) {
@@ -332,7 +338,11 @@
           return;
         }
         const data = await res.json();
-        deckList = data.decks || [];
+        deckList = (data.decks || []).sort((a, b) => {
+          const numA = extractNumericPrefix(a.title);
+          const numB = extractNumericPrefix(b.title);
+          return numA - numB;
+        });
         renderDeckDropdown();
         
         // Try to load saved selection from localStorage
@@ -1172,11 +1182,17 @@
           reportGrid.innerHTML = "";
           return;
         }
-        const totalAnswered = decks.reduce((sum, d) => sum + (d.answered || 0), 0);
-        const totalCards = decks.reduce((sum, d) => sum + (d.totalCards || 0), 0);
-        reportSubtitle.textContent = `${totalAnswered} of ${totalCards} cards answered across ${decks.length} lessons`;
+        // Sort decks by numeric prefix in title (01-09, 10-99)
+        const sortedDecks = [...decks].sort((a, b) => {
+          const numA = extractNumericPrefix(a.title);
+          const numB = extractNumericPrefix(b.title);
+          return numA - numB;
+        });
+        const totalAnswered = sortedDecks.reduce((sum, d) => sum + (d.answered || 0), 0);
+        const totalCards = sortedDecks.reduce((sum, d) => sum + (d.totalCards || 0), 0);
+        reportSubtitle.textContent = `${totalAnswered} of ${totalCards} cards answered across ${sortedDecks.length} lessons`;
         reportGrid.innerHTML = "";
-        decks.forEach((deck) => {
+        sortedDecks.forEach((deck) => {
           const wrapper = document.createElement("div");
           wrapper.className = "report-item";
 

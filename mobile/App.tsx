@@ -177,11 +177,22 @@ export default function App() {
     setDecks([]);
   }
 
+  function extractNumericPrefix(title: string): number {
+    // Extract numeric prefix from title (e.g., "01-Lesson" -> 1, "10-Lesson" -> 10)
+    const match = title.match(/^0?(\d+)/);
+    return match ? parseInt(match[1], 10) : 9999; // Put non-numeric titles at the end
+  }
+
   async function loadDecks() {
     const res = await fetchJson<{ decks: Deck[] }>("/api/decks");
-    setDecks(res.decks);
-    if (res.decks[0]) {
-      loadDeck(res.decks[0].id);
+    const sortedDecks = [...res.decks].sort((a, b) => {
+      const numA = extractNumericPrefix(a.title);
+      const numB = extractNumericPrefix(b.title);
+      return numA - numB;
+    });
+    setDecks(sortedDecks);
+    if (sortedDecks[0]) {
+      loadDeck(sortedDecks[0].id);
     }
   }
 
@@ -261,7 +272,11 @@ export default function App() {
   const answered = deck ? Object.keys(deck.progress).length : 0;
 
   const reportsSorted = useMemo(() => {
-    return [...reports].sort((a, b) => (b.answered || 0) - (a.answered || 0));
+    return [...reports].sort((a, b) => {
+      const numA = extractNumericPrefix(a.title);
+      const numB = extractNumericPrefix(b.title);
+      return numA - numB;
+    });
   }, [reports]);
 
   return (

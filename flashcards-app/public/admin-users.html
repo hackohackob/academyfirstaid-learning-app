@@ -114,7 +114,15 @@
         previewBar.className = "preview-bar-container";
         const previewBarEl = document.createElement("div");
         previewBarEl.className = "stacked-bar preview-bar";
-        const decks = user.decks || [];
+        const decks = (user.decks || []).sort((a, b) => {
+          const extractNumericPrefix = (title) => {
+            const match = String(title).match(/^0?(\d+)/);
+            return match ? parseInt(match[1], 10) : 9999;
+          };
+          const numA = extractNumericPrefix(a.title);
+          const numB = extractNumericPrefix(b.title);
+          return numA - numB;
+        });
         const totalCards = total.totalCards || 0;
         if (totalCards > 0) {
           // Aggregate categories from all decks

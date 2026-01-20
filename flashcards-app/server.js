@@ -186,9 +186,20 @@ function initDb() {
   logInfo("Database initialization complete", { decks: getDecksFromDb().length });
 }
 
+function extractNumericPrefix(title) {
+  // Extract numeric prefix from title (e.g., "01-Lesson" -> 1, "10-Lesson" -> 10)
+  const match = title.match(/^0?(\d+)/);
+  return match ? parseInt(match[1], 10) : 9999; // Put non-numeric titles at the end
+}
+
 function getDecksFromDb() {
   const rows = runQuery(`SELECT id, title, filename FROM decks ORDER BY id`);
-  return rows;
+  // Sort by numeric prefix in title (01-09, 10-99)
+  return rows.sort((a, b) => {
+    const numA = extractNumericPrefix(a.title);
+    const numB = extractNumericPrefix(b.title);
+    return numA - numB;
+  });
 }
 
 function seedFromCsv() {
@@ -650,7 +661,7 @@ function getProgressReport(userId) {
     ORDER BY d.id
   `);
 
-  return rows.map((row) => ({
+  const result = rows.map((row) => ({
     deckId: row.deck_id,
     title: row.deck_title,
     totalCards: row.total_cards,
@@ -663,6 +674,13 @@ function getProgressReport(userId) {
     unanswered: row.unanswered_count,
     answered: row.total_cards - row.unanswered_count,
   }));
+  
+  // Sort by numeric prefix in title (01-09, 10-99)
+  return result.sort((a, b) => {
+    const numA = extractNumericPrefix(a.title);
+    const numB = extractNumericPrefix(b.title);
+    return numA - numB;
+  });
 }
 
 function getAllUsersWithProgress() {

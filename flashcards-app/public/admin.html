@@ -105,6 +105,12 @@
         deleteBtn.onclick = deleteDeck;
       }
 
+      function extractNumericPrefix(title) {
+        // Extract numeric prefix from title (e.g., "01-Lesson" -> 1, "10-Lesson" -> 10)
+        const match = String(title).match(/^0?(\d+)/);
+        return match ? parseInt(match[1], 10) : 9999; // Put non-numeric titles at the end
+      }
+
       async function loadDecks(preselectId = null) {
         const res = await fetch("/api/decks");
         if (!res.ok) {
@@ -113,7 +119,11 @@
         }
         const data = await res.json();
         deckSelect.innerHTML = "";
-        const decks = data.decks || [];
+        const decks = (data.decks || []).sort((a, b) => {
+          const numA = extractNumericPrefix(a.title);
+          const numB = extractNumericPrefix(b.title);
+          return numA - numB;
+        });
         if (!decks.length) {
           deckId = null;
           deckTitle = "";
