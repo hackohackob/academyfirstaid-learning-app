@@ -119,9 +119,22 @@
             const match = String(title).match(/^0?(\d+)/);
             return match ? parseInt(match[1], 10) : 9999;
           };
+          const extractSuffix = (title) => {
+            const match = String(title).match(/^0?\d+([A-Za-z])/);
+            return match ? match[1].toUpperCase() : "";
+          };
           const numA = extractNumericPrefix(a.title);
           const numB = extractNumericPrefix(b.title);
-          return numA - numB;
+          if (numA !== numB) {
+            return numA - numB;
+          }
+          // If numbers are equal, sort by suffix (empty suffix comes before letters)
+          const suffixA = extractSuffix(a.title);
+          const suffixB = extractSuffix(b.title);
+          if (!suffixA && !suffixB) return 0;
+          if (!suffixA) return -1; // No suffix comes before suffix
+          if (!suffixB) return 1;  // Suffix comes after no suffix
+          return suffixA.localeCompare(suffixB);
         });
         const totalCards = total.totalCards || 0;
         if (totalCards > 0) {

@@ -178,18 +178,35 @@ export default function App() {
   }
 
   function extractNumericPrefix(title: string): number {
-    // Extract numeric prefix from title (e.g., "01-Lesson" -> 1, "10-Lesson" -> 10)
+    // Extract numeric prefix from title (e.g., "01-Lesson" -> 1, "10-Lesson" -> 10, "14A-Lesson" -> 14)
     const match = title.match(/^0?(\d+)/);
     return match ? parseInt(match[1], 10) : 9999; // Put non-numeric titles at the end
   }
 
+  function extractSuffix(title: string): string {
+    // Extract suffix after number (e.g., "14A-Lesson" -> "A", "14-Lesson" -> "")
+    const match = title.match(/^0?\d+([A-Za-z])/);
+    return match ? match[1].toUpperCase() : "";
+  }
+
+  function compareDeckTitles(a: { title: string }, b: { title: string }): number {
+    const numA = extractNumericPrefix(a.title);
+    const numB = extractNumericPrefix(b.title);
+    if (numA !== numB) {
+      return numA - numB;
+    }
+    // If numbers are equal, sort by suffix (empty suffix comes before letters)
+    const suffixA = extractSuffix(a.title);
+    const suffixB = extractSuffix(b.title);
+    if (!suffixA && !suffixB) return 0;
+    if (!suffixA) return -1; // No suffix comes before suffix
+    if (!suffixB) return 1;  // Suffix comes after no suffix
+    return suffixA.localeCompare(suffixB);
+  }
+
   async function loadDecks() {
     const res = await fetchJson<{ decks: Deck[] }>("/api/decks");
-    const sortedDecks = [...res.decks].sort((a, b) => {
-      const numA = extractNumericPrefix(a.title);
-      const numB = extractNumericPrefix(b.title);
-      return numA - numB;
-    });
+    const sortedDecks = [...res.decks].sort(compareDeckTitles);
     setDecks(sortedDecks);
     if (sortedDecks[0]) {
       loadDeck(sortedDecks[0].id);
@@ -272,11 +289,7 @@ export default function App() {
   const answered = deck ? Object.keys(deck.progress).length : 0;
 
   const reportsSorted = useMemo(() => {
-    return [...reports].sort((a, b) => {
-      const numA = extractNumericPrefix(a.title);
-      const numB = extractNumericPrefix(b.title);
-      return numA - numB;
-    });
+    return [...reports].sort(compareDeckTitles);
   }, [reports]);
 
   return (

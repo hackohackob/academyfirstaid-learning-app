@@ -187,19 +187,36 @@ function initDb() {
 }
 
 function extractNumericPrefix(title) {
-  // Extract numeric prefix from title (e.g., "01-Lesson" -> 1, "10-Lesson" -> 10)
+  // Extract numeric prefix from title (e.g., "01-Lesson" -> 1, "10-Lesson" -> 10, "14A-Lesson" -> 14)
   const match = title.match(/^0?(\d+)/);
   return match ? parseInt(match[1], 10) : 9999; // Put non-numeric titles at the end
 }
 
+function extractSuffix(title) {
+  // Extract suffix after number (e.g., "14A-Lesson" -> "A", "14-Lesson" -> "")
+  const match = title.match(/^0?\d+([A-Za-z])/);
+  return match ? match[1].toUpperCase() : "";
+}
+
+function compareDeckTitles(a, b) {
+  const numA = extractNumericPrefix(a.title);
+  const numB = extractNumericPrefix(b.title);
+  if (numA !== numB) {
+    return numA - numB;
+  }
+  // If numbers are equal, sort by suffix (empty suffix comes before letters)
+  const suffixA = extractSuffix(a.title);
+  const suffixB = extractSuffix(b.title);
+  if (!suffixA && !suffixB) return 0;
+  if (!suffixA) return -1; // No suffix comes before suffix
+  if (!suffixB) return 1;  // Suffix comes after no suffix
+  return suffixA.localeCompare(suffixB);
+}
+
 function getDecksFromDb() {
   const rows = runQuery(`SELECT id, title, filename FROM decks ORDER BY id`);
-  // Sort by numeric prefix in title (01-09, 10-99)
-  return rows.sort((a, b) => {
-    const numA = extractNumericPrefix(a.title);
-    const numB = extractNumericPrefix(b.title);
-    return numA - numB;
-  });
+  // Sort by numeric prefix in title (01-09, 10-99, 14A after 14, etc.)
+  return rows.sort(compareDeckTitles);
 }
 
 function seedFromCsv() {
@@ -675,12 +692,8 @@ function getProgressReport(userId) {
     answered: row.total_cards - row.unanswered_count,
   }));
   
-  // Sort by numeric prefix in title (01-09, 10-99)
-  return result.sort((a, b) => {
-    const numA = extractNumericPrefix(a.title);
-    const numB = extractNumericPrefix(b.title);
-    return numA - numB;
-  });
+  // Sort by numeric prefix in title (01-09, 10-99, 14A after 14, etc.)
+  return result.sort(compareDeckTitles);
 }
 
 function getAllUsersWithProgress() {
