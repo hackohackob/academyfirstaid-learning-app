@@ -1007,6 +1007,35 @@ function createServer() {
       return sendJson(res, 200, { ok: true }, origin);
     }
 
+    if (
+      req.method === "DELETE" &&
+      pathParts[0] === "api" &&
+      pathParts[1] === "admin" &&
+      pathParts[2] === "users" &&
+      pathParts[3]
+    ) {
+      if (!auth.user || !auth.user.is_admin) {
+        logWarn("Unauthorized admin user deletion attempt", { userId: auth.user?.id, targetUserId: pathParts[3] });
+        return sendJson(res, 403, { error: "Admin required" }, origin);
+      }
+      const userId = pathParts[3];
+      const user = runQuery(`SELECT id, email, name FROM users WHERE id = ${q(userId)} LIMIT 1`)[0];
+      if (!user) {
+        logWarn("Admin user deletion - user not found", { targetUserId: userId, adminUserId: auth.user.id });
+        return sendJson(res, 404, { error: "User not found" }, origin);
+      }
+      // Prevent deleting yourself
+      if (parseInt(userId) === auth.user.id) {
+        logWarn("Admin attempted to delete own account", { userId: auth.user.id });
+        return sendJson(res, 400, { error: "Cannot delete your own account" }, origin);
+      }
+      logInfo("Admin deleting user", { targetUserId: userId, targetEmail: user.email, adminUserId: auth.user.id });
+      // Delete user (cascades to progress, ratings, and sessions via foreign keys)
+      runSql(`DELETE FROM users WHERE id = ${q(userId)}`);
+      logInfo("Admin user deletion complete", { targetUserId: userId, adminUserId: auth.user.id });
+      return sendJson(res, 200, { ok: true }, origin);
+    }
+
     if (req.method === "POST" && pathParts[0] === "api" && pathParts[1] === "decks" && pathParts[2] && pathParts[3] === "rating") {
       if (!auth.user) {
         logWarn("Unauthorized rating update");

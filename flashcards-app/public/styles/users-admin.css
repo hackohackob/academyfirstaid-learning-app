@@ -38,6 +38,61 @@
   padding: 16px;
   display: grid;
   gap: 12px;
+  position: relative;
+}
+
+.user-card .accordion-content {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease-out, opacity 0.2s ease-out;
+  opacity: 0;
+}
+
+.user-card.expanded .accordion-content {
+  max-height: 2000px;
+  opacity: 1;
+  transition: max-height 0.4s ease-in, opacity 0.3s ease-in;
+}
+
+.preview-bar-container {
+  margin: 8px 0;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.preview-bar {
+  height: 16px;
+}
+
+.accordion-toggle {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  color: var(--text);
+  transition: border-color 120ms ease, transform 120ms ease;
+  flex-shrink: 0;
+}
+
+.accordion-toggle:hover {
+  border-color: var(--accent);
+  transform: scale(1.05);
+}
+
+.accordion-toggle .chevron {
+  font-size: 14px;
+  transition: transform 0.2s ease;
+  color: var(--muted);
+}
+
+.user-card.expanded .accordion-toggle .chevron {
+  color: var(--accent);
 }
 
 .user-head {
@@ -139,12 +194,25 @@
 .actions {
   display: flex;
   justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .btn.danger {
   border-color: rgba(239, 68, 68, 0.6);
   color: var(--danger);
   background: rgba(239, 68, 68, 0.08);
+}
+
+.btn.danger.ghost {
+  background: transparent;
+  border-color: rgba(239, 68, 68, 0.6);
+  color: var(--danger);
+}
+
+.btn.danger.ghost:hover {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.8);
 }
 
 .empty {

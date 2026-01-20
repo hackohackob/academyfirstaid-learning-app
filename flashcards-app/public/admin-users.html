@@ -109,22 +109,71 @@
         header.appendChild(title);
         header.appendChild(chips);
 
+        // Preview bar (shown when collapsed) - aggregate all decks
+        const previewBar = document.createElement("div");
+        previewBar.className = "preview-bar-container";
+        const previewBarEl = document.createElement("div");
+        previewBarEl.className = "stacked-bar preview-bar";
+        const decks = user.decks || [];
+        const totalCards = total.totalCards || 0;
+        if (totalCards > 0) {
+          // Aggregate categories from all decks
+          const aggregated = decks.reduce((acc, deck) => {
+            acc.Again += deck.categories?.Again || 0;
+            acc.Hard += deck.categories?.Hard || 0;
+            acc.Good += deck.categories?.Good || 0;
+            acc.Easy += deck.categories?.Easy || 0;
+            acc.unanswered += deck.unanswered || 0;
+            return acc;
+          }, { Again: 0, Hard: 0, Good: 0, Easy: 0, unanswered: 0 });
+          
+          addChunk(previewBarEl, aggregated.Again, totalCards, "again");
+          addChunk(previewBarEl, aggregated.Hard, totalCards, "hard");
+          addChunk(previewBarEl, aggregated.Good, totalCards, "good");
+          addChunk(previewBarEl, aggregated.Easy, totalCards, "easy");
+          addChunk(previewBarEl, aggregated.unanswered, totalCards, "unanswered");
+        }
+        
+        // Toggle button
+        const toggleBtn = document.createElement("button");
+        toggleBtn.className = "accordion-toggle";
+        toggleBtn.type = "button";
+        toggleBtn.innerHTML = '<span class="chevron">▼</span>';
+        toggleBtn.onclick = () => {
+          card.classList.toggle("expanded");
+          toggleBtn.querySelector(".chevron").textContent = card.classList.contains("expanded") ? "▲" : "▼";
+        };
+        
+        previewBar.appendChild(previewBarEl);
+        previewBar.appendChild(toggleBtn);
+
+        // Accordion content (shown when expanded)
+        const accordionContent = document.createElement("div");
+        accordionContent.className = "accordion-content";
         const deckList = document.createElement("div");
         deckList.className = "deck-list";
-        const decks = user.decks || [];
         decks.forEach((deck) => deckList.appendChild(renderDeckRow(deck)));
+        accordionContent.appendChild(deckList);
 
         const actions = document.createElement("div");
         actions.className = "actions";
         const resetBtn = document.createElement("button");
-        resetBtn.className = "btn danger";
+        resetBtn.className = "btn danger ghost";
         resetBtn.type = "button";
         resetBtn.textContent = "Reset progress";
         resetBtn.onclick = () => resetUser(user);
+        const deleteBtn = document.createElement("button");
+        deleteBtn.className = "btn danger";
+        deleteBtn.type = "button";
+        deleteBtn.textContent = "Delete user";
+        deleteBtn.onclick = () => deleteUser(user);
         actions.appendChild(resetBtn);
+        actions.appendChild(deleteBtn);
 
         card.appendChild(header);
-        card.appendChild(deckList);
+        card.appendChild(previewBar);
+        card.appendChild(toggleBtn);
+        card.appendChild(accordionContent);
         card.appendChild(actions);
         return card;
       }
@@ -179,6 +228,21 @@
         }
         await loadUsers();
         statusText.textContent = "Progress reset.";
+      }
+
+      async function deleteUser(user) {
+        const confirmed = confirm(`Are you sure you want to delete user "${user.name || user.email}"?\n\nThis action cannot be undone and will permanently delete:\n- All user progress\n- All user ratings\n- The user account`);
+        if (!confirmed) return;
+
+        statusText.textContent = `Deleting ${user.name || user.email}...`;
+        const res = await fetch(`/api/admin/users/${user.id}`, { method: "DELETE" });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          statusText.textContent = data.error || "Unable to delete user.";
+          return;
+        }
+        await loadUsers();
+        statusText.textContent = "User deleted.";
       }
     </script>
   </body>
