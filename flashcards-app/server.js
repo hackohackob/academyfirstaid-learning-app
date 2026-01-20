@@ -484,32 +484,101 @@ function listDecks() {
 function parseCsvQuestions(filePath) {
   try {
     const raw = fs.readFileSync(filePath, "utf8");
-    const lines = raw.split(/\r?\n/).filter(Boolean);
-    if (lines.length === 0) {
+    if (!raw.trim()) {
       logWarn("Empty CSV file", { filePath });
       return [];
     }
     
     // Auto-detect delimiter from header row
-    const header = lines[0];
+    const firstLineEnd = raw.indexOf('\n');
+    const header = firstLineEnd > 0 ? raw.substring(0, firstLineEnd) : raw.split('\r')[0];
     const delimiter = header.includes(";") ? ";" : ",";
     
-    const rows = [];
-    for (let i = 1; i < lines.length; i++) {
-      const cols = smartSplit(lines[i], delimiter);
-      if (cols.length < 2) continue;
-      rows.push({
-        question: cols[0].trim(),
-        answer: cols[1].trim(),
-        imageUrl: (cols[2] || "").trim() || null,
-        answerImageUrl: (cols[3] || "").trim() || null,
-      });
+    // Parse CSV properly handling multi-line quoted fields
+    const rows = parseCsvWithMultiline(raw, delimiter);
+    
+    // Skip header row
+    if (rows.length > 0) {
+      rows.shift();
     }
-    return rows;
+    
+    return rows
+      .filter(row => row.length >= 2 && row[0] && row[1])
+      .map(row => ({
+        question: row[0].trim(),
+        answer: row[1].trim(),
+        imageUrl: (row[2] || "").trim() || null,
+        answerImageUrl: (row[3] || "").trim() || null,
+      }));
   } catch (error) {
     logError("Failed to parse CSV questions", { filePath, error });
     return [];
   }
+}
+
+// CSV parser that properly handles quoted fields spanning multiple lines
+function parseCsvWithMultiline(raw, delimiter = ",") {
+  const rows = [];
+  const fields = [];
+  let currentField = "";
+  let inQuotes = false;
+  let rowStart = true;
+  
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i];
+    const next = raw[i + 1];
+    
+    // Handle escaped quotes ("")
+    if (ch === '"' && inQuotes && next === '"') {
+      currentField += '"';
+      i++; // Skip next quote
+      continue;
+    }
+    
+    // Toggle quote state
+    if (ch === '"') {
+      inQuotes = !inQuotes;
+      continue;
+    }
+    
+    // Handle delimiter (only when not in quotes)
+    if (ch === delimiter && !inQuotes) {
+      fields.push(currentField);
+      currentField = "";
+      rowStart = false;
+      continue;
+    }
+    
+    // Handle newline
+    if ((ch === '\n' || (ch === '\r' && next !== '\n')) && !inQuotes) {
+      // End of row
+      fields.push(currentField);
+      if (fields.length > 0 && fields.some(f => f.trim())) {
+        rows.push(fields.slice());
+      }
+      fields.length = 0;
+      currentField = "";
+      rowStart = true;
+      // Skip \r\n combination
+      if (ch === '\r' && next === '\n') {
+        i++;
+      }
+      continue;
+    }
+    
+    // Add character to current field
+    currentField += ch;
+  }
+  
+  // Handle last field/row (if file doesn't end with newline)
+  if (currentField || fields.length > 0) {
+    fields.push(currentField);
+    if (fields.length > 0 && fields.some(f => f.trim())) {
+      rows.push(fields);
+    }
+  }
+  
+  return rows;
 }
 
 // Basic CSV splitter that supports double-quoted values with commas.
