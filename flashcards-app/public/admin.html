@@ -175,24 +175,49 @@
         const data = await res.json();
         deckTitle = data.title || "";
         deckTitleInput.value = deckTitle;
-        cards = data.cards.map((c) => ({
-          ...c,
-          id: c.id,
-          imageData: null,
-          answerImageData: null,
-          removeImage: false,
-          removeAnswerImage: false,
-          expanded: false,
-        }));
+        const ratingCounts = data.ratingCounts || {};
+        cards = data.cards.map((c, idx) => {
+          const counts = ratingCounts[String(c.id)] || { thumbsUp: 0, thumbsDown: 0 };
+          return {
+            ...c,
+            id: c.id,
+            imageData: null,
+            answerImageData: null,
+            removeImage: false,
+            removeAnswerImage: false,
+            expanded: false,
+            thumbsUp: counts.thumbsUp || 0,
+            thumbsDown: counts.thumbsDown || 0,
+            originalIdx: idx,
+          };
+        });
         render();
       }
 
       function render() {
+        // Sort cards: negatively rated first (more thumbs down), then by thumbs up/down ratio
+        const sortedCards = [...cards].sort((a, b) => {
+          const aDown = a.thumbsDown || 0;
+          const bDown = b.thumbsDown || 0;
+          const aUp = a.thumbsUp || 0;
+          const bUp = b.thumbsUp || 0;
+          
+          // First priority: cards with more thumbs down come first
+          if (aDown !== bDown) {
+            return bDown - aDown;
+          }
+          // Second priority: if same thumbs down, prioritize lower thumbs up ratio
+          const aRatio = aDown > 0 ? aUp / aDown : 0;
+          const bRatio = bDown > 0 ? bUp / bDown : 0;
+          return aRatio - bRatio;
+        });
+        
         cardsEl.innerHTML = "";
-        cards.forEach((card, idx) => {
+        sortedCards.forEach((card, idx) => {
+          const originalIdx = card.originalIdx;
           const wrapper = document.createElement("div");
           wrapper.className = "card-row";
-          wrapper.dataset.idx = idx;
+          wrapper.dataset.idx = originalIdx;
 
           const header = document.createElement("div");
           header.className = "card-header";
@@ -203,13 +228,27 @@
 
           const title = document.createElement("div");
           title.className = "card-title";
-          title.innerHTML = `<span class="id">#${idx + 1}</span><span class="text">${truncate(
+          title.innerHTML = `<span class="id">#${originalIdx + 1}</span><span class="text">${truncate(
             card.question || "(untitled)",
             90
           )}</span>`;
 
           const right = document.createElement("div");
           right.className = "chips";
+          
+          // Add rating score chip
+          const thumbsUp = card.thumbsUp || 0;
+          const thumbsDown = card.thumbsDown || 0;
+          if (thumbsUp > 0 || thumbsDown > 0) {
+            const scoreChip = document.createElement("span");
+            scoreChip.className = "chip score-chip";
+            scoreChip.innerHTML = `<span class="score-up">${thumbsUp}👍</span> <span class="score-down">${thumbsDown}👎</span>`;
+            if (thumbsDown > 0) {
+              scoreChip.classList.add("has-downvotes");
+            }
+            right.appendChild(scoreChip);
+          }
+          
           if (card.image || card.imageData || card.answerImage || card.answerImageData) {
             const chip = document.createElement("span");
             chip.className = "chip";
@@ -237,8 +276,8 @@
           body.appendChild(buildTextarea("Question", card.question || "", (val) => (card.question = val)));
           body.appendChild(buildTextarea("Answer", card.answer || "", (val) => (card.answer = val)));
 
-          body.appendChild(buildImageRow("Question image", idx, "image"));
-          body.appendChild(buildImageRow("Answer image", idx, "answerImage"));
+          body.appendChild(buildImageRow("Question image", originalIdx, "image"));
+          body.appendChild(buildImageRow("Answer image", originalIdx, "answerImage"));
 
           wrapper.appendChild(header);
           wrapper.appendChild(body);
@@ -333,6 +372,9 @@
           removeImage: false,
           removeAnswerImage: false,
           expanded: true,
+          thumbsUp: 0,
+          thumbsDown: 0,
+          originalIdx: cards.length,
         });
         render();
         const last = cardsEl.lastElementChild;

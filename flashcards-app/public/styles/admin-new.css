@@ -141,6 +141,27 @@ main {
   font-size: 12px;
 }
 
+.score-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  padding: 4px 8px;
+}
+
+.score-chip .score-up {
+  color: rgba(121, 208, 133, 0.9);
+}
+
+.score-chip .score-down {
+  color: rgba(239, 68, 68, 0.9);
+}
+
+.score-chip.has-downvotes {
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.08);
+}
+
 .card-body {
   padding: 14px;
   display: grid;

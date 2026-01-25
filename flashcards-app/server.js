@@ -903,7 +903,27 @@ function createServer() {
       const progress = Object.fromEntries(progressRows.map((p) => [String(p.card_id), p.category]));
       const ratingRows = runQuery(`SELECT card_id, rating FROM ratings WHERE deck_id = ${q(deck.id)} AND user_id = ${q(auth.user.id)}`);
       const ratings = Object.fromEntries(ratingRows.map((r) => [String(r.card_id), r.rating]));
-      return sendJson(res, 200, { ...deck, progress, ratings, categories: CATEGORY_LABELS }, origin);
+      
+      // For admin users, include aggregate rating counts for all cards
+      let ratingCounts = {};
+      if (auth.user.is_admin) {
+        const aggregateRatings = runQuery(`
+          SELECT card_id, 
+                 SUM(CASE WHEN rating = 'up' THEN 1 ELSE 0 END) as thumbs_up,
+                 SUM(CASE WHEN rating = 'down' THEN 1 ELSE 0 END) as thumbs_down
+          FROM ratings
+          WHERE deck_id = ${q(deck.id)}
+          GROUP BY card_id
+        `);
+        ratingCounts = Object.fromEntries(
+          aggregateRatings.map((r) => [
+            String(r.card_id),
+            { thumbsUp: r.thumbs_up || 0, thumbsDown: r.thumbs_down || 0 }
+          ])
+        );
+      }
+      
+      return sendJson(res, 200, { ...deck, progress, ratings, ratingCounts, categories: CATEGORY_LABELS }, origin);
     }
 
     if (req.method === "POST" && pathParts[0] === "api" && pathParts[1] === "decks" && pathParts[2] && pathParts[3] === "progress") {

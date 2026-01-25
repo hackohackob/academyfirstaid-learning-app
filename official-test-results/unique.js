@@ -9,7 +9,11 @@ const uniqueQuestions = new Map();
 
 // Function to normalize question text for comparison
 function normalizeQuestion(text) {
-  return text.trim().toLowerCase().replace(/\s+/g, ' ');
+  // Strip leading numbers followed by period/dot and optional space
+  // e.g., "17. Question" -> "Question", "50. Question" -> "Question"
+  let normalized = text.trim().replace(/^\d+\.\s*/, '');
+  // Normalize whitespace and convert to lowercase
+  return normalized.toLowerCase().replace(/\s+/g, ' ');
 }
 
 // Function to detect delimiter
@@ -87,6 +91,9 @@ files.forEach(file => {
       }
       
       if (!question) return;
+      
+      // Strip leading numbers from question text (e.g., "17. Question" -> "Question")
+      question = question.replace(/^\d+\.\s*/, '').trim();
       
       const normalized = normalizeQuestion(question);
       
