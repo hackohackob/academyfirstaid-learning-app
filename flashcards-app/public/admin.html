@@ -236,17 +236,59 @@
           const right = document.createElement("div");
           right.className = "chips";
           
-          // Add rating score chip
+          // Add rating score chip with reset button
           const thumbsUp = card.thumbsUp || 0;
           const thumbsDown = card.thumbsDown || 0;
           if (thumbsUp > 0 || thumbsDown > 0) {
+            const scoreContainer = document.createElement("span");
+            scoreContainer.className = "score-container";
+            
             const scoreChip = document.createElement("span");
             scoreChip.className = "chip score-chip";
             scoreChip.innerHTML = `<span class="score-up">${thumbsUp}👍</span> <span class="score-down">${thumbsDown}👎</span>`;
             if (thumbsDown > 0) {
               scoreChip.classList.add("has-downvotes");
             }
-            right.appendChild(scoreChip);
+            
+            const resetBtn = document.createElement("button");
+            resetBtn.className = "reset-rating-btn";
+            resetBtn.textContent = "×";
+            resetBtn.title = "Reset all ratings";
+            resetBtn.onclick = async (e) => {
+              e.stopPropagation();
+              if (!card.id) {
+                statusEl.textContent = "Cannot reset ratings for unsaved card.";
+                return;
+              }
+              if (!window.confirm(`Reset all ratings for this question? This will remove all thumbs up and thumbs down ratings from all users.`)) {
+                return;
+              }
+              resetBtn.disabled = true;
+              resetBtn.textContent = "…";
+              try {
+                const res = await fetch(`/api/admin/decks/${deckId}/cards/${card.id}/reset-ratings`, {
+                  method: "POST",
+                });
+                if (!res.ok) {
+                  throw new Error("Failed to reset ratings");
+                }
+                // Update local card data without reloading the entire deck
+                card.thumbsUp = 0;
+                card.thumbsDown = 0;
+                render();
+                statusEl.textContent = "Ratings reset successfully";
+              } catch (error) {
+                statusEl.textContent = "Failed to reset ratings";
+                console.error(error);
+              } finally {
+                resetBtn.disabled = false;
+                resetBtn.textContent = "×";
+              }
+            };
+            
+            scoreContainer.appendChild(scoreChip);
+            scoreContainer.appendChild(resetBtn);
+            right.appendChild(scoreContainer);
           }
           
           if (card.image || card.imageData || card.answerImage || card.answerImageData) {
@@ -359,6 +401,7 @@
         container.appendChild(previewRow);
         return container;
       }
+
 
       function addCard() {
         cards.push({

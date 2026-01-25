@@ -948,7 +948,39 @@ function createServer() {
       return sendJson(res, 200, { ok: true }, origin);
     }
 
-    if (req.method === "POST" && pathParts[0] === "api" && pathParts[1] === "admin" && pathParts[2] === "decks" && pathParts[3]) {
+    if (
+      req.method === "POST" &&
+      pathParts[0] === "api" &&
+      pathParts[1] === "admin" &&
+      pathParts[2] === "decks" &&
+      pathParts[3] &&
+      pathParts[4] === "cards" &&
+      pathParts[5] &&
+      pathParts[6] === "reset-ratings"
+    ) {
+      if (!auth.user || !auth.user.is_admin) {
+        logWarn("Unauthorized admin rating reset attempt", { userId: auth.user?.id });
+        return sendJson(res, 403, { error: "Admin required" }, origin);
+      }
+      const deckId = pathParts[3];
+      const cardId = pathParts[5];
+      const deck = getDeck(deckId);
+      if (!deck) {
+        logWarn("Admin rating reset - deck not found", { deckId, userId: auth.user.id });
+        return sendJson(res, 404, { error: "Deck not found" }, origin);
+      }
+      const cardExists = deck.cards.some((c) => String(c.id) === String(cardId));
+      if (!cardExists) {
+        logWarn("Admin rating reset - card not found", { deckId, cardId, userId: auth.user.id });
+        return sendJson(res, 404, { error: "Card not found" }, origin);
+      }
+      logInfo("Admin resetting all ratings for card", { deckId, cardId, userId: auth.user.id });
+      runSql(`DELETE FROM ratings WHERE deck_id = ${q(deckId)} AND card_id = ${q(cardId)}`);
+      logInfo("All ratings reset for card", { deckId, cardId, userId: auth.user.id });
+      return sendJson(res, 200, { ok: true, thumbsUp: 0, thumbsDown: 0 }, origin);
+    }
+
+    if (req.method === "POST" && pathParts[0] === "api" && pathParts[1] === "admin" && pathParts[2] === "decks" && pathParts[3] && pathParts.length === 4) {
       if (!auth.user || !auth.user.is_admin) {
         logWarn("Unauthorized admin deck update attempt", { userId: auth.user?.id, deckId: pathParts[3] });
         return sendJson(res, 403, { error: "Admin required" }, origin);
