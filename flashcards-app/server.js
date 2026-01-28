@@ -148,7 +148,7 @@ function initDb() {
       user_id INTEGER NOT NULL,
       card_id INTEGER NOT NULL,
       deck_id INTEGER NOT NULL,
-      rating TEXT NOT NULL CHECK (rating IN ('up','down')),
+      rating TEXT NOT NULL CHECK (rating IN ('up','down','more_info','ignore')),
       PRIMARY KEY (user_id, card_id),
       FOREIGN KEY(card_id) REFERENCES cards(id) ON DELETE CASCADE,
       FOREIGN KEY(deck_id) REFERENCES decks(id) ON DELETE CASCADE
@@ -174,6 +174,7 @@ function initDb() {
   migrateProgressHistory();
   migrateDeckIdsToInt();
   migrateAnswerImages();
+  migrateRatingsSchema();
   ensureDefaultAdmin();
   const existingDecks = getDecksFromDb();
   if (existingDecks.length === 0) {
@@ -340,7 +341,7 @@ function migrateProgressRatingsToCardIds() {
         user_id INTEGER NOT NULL,
         card_id INTEGER NOT NULL,
         deck_id TEXT NOT NULL,
-        rating TEXT NOT NULL CHECK (rating IN ('up','down')),
+        rating TEXT NOT NULL CHECK (rating IN ('up','down','more_info','ignore')),
         PRIMARY KEY (user_id, card_id),
         FOREIGN KEY(card_id) REFERENCES cards(id) ON DELETE CASCADE,
         FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -359,7 +360,7 @@ function migrateProgressRatingsToCardIds() {
         user_id INTEGER NOT NULL,
         card_id INTEGER NOT NULL,
         deck_id TEXT NOT NULL,
-        rating TEXT NOT NULL CHECK (rating IN ('up','down')),
+        rating TEXT NOT NULL CHECK (rating IN ('up','down','more_info','ignore')),
         PRIMARY KEY (user_id, card_id),
         FOREIGN KEY(card_id) REFERENCES cards(id) ON DELETE CASCADE,
         FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -457,15 +458,15 @@ function migrateDeckIdsToInt() {
      JOIN decks_new d ON d.slug = p.deck_id`,
     `CREATE INDEX IF NOT EXISTS idx_progress_user_card_time ON progress_new(user_id, deck_id, card_id, created_at DESC)`,
 
-    `CREATE TABLE IF NOT EXISTS ratings_new (
-      user_id INTEGER NOT NULL,
-      card_id INTEGER NOT NULL,
-      deck_id INTEGER NOT NULL,
-      rating TEXT NOT NULL CHECK (rating IN ('up','down')),
-      PRIMARY KEY (user_id, card_id),
-      FOREIGN KEY(card_id) REFERENCES cards(id) ON DELETE CASCADE,
-      FOREIGN KEY(deck_id) REFERENCES decks(id) ON DELETE CASCADE
-    )`,
+      `CREATE TABLE IF NOT EXISTS ratings_new (
+        user_id INTEGER NOT NULL,
+        card_id INTEGER NOT NULL,
+        deck_id INTEGER NOT NULL,
+        rating TEXT NOT NULL CHECK (rating IN ('up','down','more_info','ignore')),
+        PRIMARY KEY (user_id, card_id),
+        FOREIGN KEY(card_id) REFERENCES cards(id) ON DELETE CASCADE,
+        FOREIGN KEY(deck_id) REFERENCES decks(id) ON DELETE CASCADE
+      )`,
     `INSERT INTO ratings_new (user_id, card_id, deck_id, rating)
      SELECT r.user_id, r.card_id, d.id, r.rating
      FROM ratings r
@@ -489,6 +490,38 @@ function migrateAnswerImages() {
   }
   logInfo("Adding answer_image column to cards table");
   runSql(`ALTER TABLE cards ADD COLUMN answer_image TEXT`);
+}
+
+function migrateRatingsSchema() {
+  // Check if ratings table exists and what CHECK constraint it has
+  const tableInfo = runQuery(`SELECT sql FROM sqlite_master WHERE type='table' AND name='ratings'`);
+  if (!tableInfo || !tableInfo[0]) {
+    logInfo("Ratings table does not exist, will be created with new schema");
+    return;
+  }
+  const sql = tableInfo[0].sql || "";
+  // Check if the constraint already includes the new rating types
+  if (sql.includes("'more_info'") && sql.includes("'ignore'")) {
+    logInfo("Ratings schema migration not needed");
+    return;
+  }
+  logInfo("Migrating ratings schema to support new rating types");
+  runSqlBatch([
+    `CREATE TABLE IF NOT EXISTS ratings_new (
+      user_id INTEGER NOT NULL,
+      card_id INTEGER NOT NULL,
+      deck_id INTEGER NOT NULL,
+      rating TEXT NOT NULL CHECK (rating IN ('up','down','more_info','ignore')),
+      PRIMARY KEY (user_id, card_id),
+      FOREIGN KEY(card_id) REFERENCES cards(id) ON DELETE CASCADE,
+      FOREIGN KEY(deck_id) REFERENCES decks(id) ON DELETE CASCADE
+    )`,
+    `INSERT INTO ratings_new (user_id, card_id, deck_id, rating)
+     SELECT user_id, card_id, deck_id, rating FROM ratings`,
+    `DROP TABLE ratings`,
+    `ALTER TABLE ratings_new RENAME TO ratings`,
+  ]);
+  logInfo("Ratings schema migration complete");
 }
 
 function ensureDefaultAdmin() {
@@ -1200,9 +1233,9 @@ function createServer() {
         logWarn("Invalid rating update - missing cardId", { body });
         return sendJson(res, 400, { error: "cardId is required" }, origin);
       }
-      if (rating !== "up" && rating !== "down" && rating !== null) {
+      if (rating !== "up" && rating !== "down" && rating !== "more_info" && rating !== "ignore" && rating !== null) {
         logWarn("Invalid rating update - invalid rating", { cardId, rating });
-        return sendJson(res, 400, { error: "rating must be up, down, or null" }, origin);
+        return sendJson(res, 400, { error: "rating must be up, down, more_info, ignore, or null" }, origin);
       }
       if (rating === null) {
         runSql(`DELETE FROM ratings WHERE user_id = ${q(auth.user.id)} AND card_id = ${q(cardId)} AND deck_id = ${q(deckId)}`);
@@ -1500,7 +1533,7 @@ initDb();
 
 if (require.main === module) {
   const server = createServer();
-  const port = process.env.PORT || 3000;
+  const port = process.env.PORT || 3106;
   server.listen(port, () => {
     logInfo("Flashcards server started", { port, nodeEnv: process.env.NODE_ENV || "development" });
   });

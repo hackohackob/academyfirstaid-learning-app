@@ -389,6 +389,18 @@ select:focus-visible {
   color: var(--danger);
 }
 
+#ratingMoreInfo.selected {
+  border-color: #3b82f6;
+  box-shadow: 0 10px 30px rgba(59, 130, 246, 0.24);
+  color: #3b82f6;
+}
+
+#ratingIgnore.selected {
+  border-color: #6b7280;
+  box-shadow: 0 10px 30px rgba(107, 114, 128, 0.24);
+  color: #6b7280;
+}
+
 .card {
   background: var(--card);
   border: 1px solid var(--border);

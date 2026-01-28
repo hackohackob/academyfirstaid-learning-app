@@ -123,10 +123,6 @@ function main() {
 
     let combinedCount = 0;
     for (const [base, parts] of groups.entries()) {
-      if (parts.length <= 1) {
-        console.log(`Skipped ${base}: only one part found.`);
-        continue;
-      }
       combineGroup(base, parts);
       combinedCount += 1;
     }

@@ -72,8 +72,8 @@
                 <span class="muted" id="status">Stay focused</span>
               </div>
               <div class="card-rating">
-                <button id="ratingUp" class="rate-btn" title="Thumbs up">👍</button>
                 <button id="ratingDown" class="rate-btn" title="Thumbs down">👎</button>
+                <button id="ratingIgnore" class="rate-btn" title="Ignore">⏭️</button>
               </div>
             </article>
             <article class="card answer-card">
@@ -160,8 +160,8 @@
       const controls = document.getElementById("controls");
       const prevBtn = document.getElementById("prevBtn");
       const nextBtn = document.getElementById("nextBtn");
-      const ratingUp = document.getElementById("ratingUp");
       const ratingDown = document.getElementById("ratingDown");
+      const ratingIgnore = document.getElementById("ratingIgnore");
       const userArea = document.getElementById("userArea");
       const authPanel = document.getElementById("authPanel");
       const authTitle = document.getElementById("authTitle");
@@ -223,8 +223,8 @@
       async function init() {
         prevBtn.addEventListener("click", () => move(-1));
         nextBtn.addEventListener("click", () => move(1));
-        ratingUp.addEventListener("click", () => selectRating("up"));
         ratingDown.addEventListener("click", () => selectRating("down"));
+        ratingIgnore.addEventListener("click", () => selectRating("ignore"));
         authSubmit.onclick = submitAuth;
         authCancel.onclick = closeAuth;
         revealBtn.onclick = reveal;
@@ -665,8 +665,8 @@
         pillRow.innerHTML = "";
         controls.innerHTML = "";
         progressEl.textContent = "";
-        ratingUp.classList.remove("selected");
         ratingDown.classList.remove("selected");
+        ratingIgnore.classList.remove("selected");
         progressFill.style.width = "0%";
         sessionMeta.textContent = "Add a deck to begin studying.";
         emptyState.style.display = "block";
@@ -716,8 +716,12 @@
             answerImageFrame.innerHTML = "";
             answerImageFrame.style.display = "none";
           }
-          ratingUp.classList.remove("selected");
           ratingDown.classList.remove("selected");
+          ratingIgnore.classList.remove("selected");
+          // Show all buttons when no cards
+          [...controls.children].forEach((btn) => {
+            btn.style.display = "";
+          });
           return;
         }
         if (!cards[index]) index = 0;
@@ -731,9 +735,40 @@
         answerEl.textContent = showAnswer ? card.answer : "Press reveal to view the answer.";
         const current = progressMap[String(card.id)];
         statusEl.textContent = current ? `You marked this as ${current}` : "";
+        
+        // Enable/disable buttons based on current answer
+        const difficultyOrder = ["Again", "Hard", "Good", "Easy"];
         [...controls.children].forEach((btn) => {
-          btn.classList.toggle("selected", btn.dataset.name === current);
+          const btnCategory = btn.dataset.name;
+          btn.classList.toggle("selected", btnCategory === current);
+          
+          if (current) {
+            // Card is already answered - enable/disable buttons based on valid transitions
+            const currentIndex = difficultyOrder.indexOf(current);
+            const btnIndex = difficultyOrder.indexOf(btnCategory);
+            
+            if (currentIndex === -1 || btnIndex === -1) {
+              // Unknown category, enable all
+              btn.disabled = false;
+            } else if (btnCategory === current) {
+              // Always enable the current selection
+              btn.disabled = false;
+            } else if (btnIndex < currentIndex) {
+              // Button is harder than current - always enable (can always make harder)
+              btn.disabled = false;
+            } else if (btnIndex === currentIndex + 1) {
+              // Button is exactly 1 level easier - enable (can go 1 step easier)
+              btn.disabled = false;
+            } else {
+              // Button is more than 1 level easier - disable
+              btn.disabled = true;
+            }
+          } else {
+            // Card not answered yet - enable all buttons
+            btn.disabled = false;
+          }
         });
+        
         renderRating();
         renderImages(card);
         // deckBadge.textContent = deck.title || "Deck";
@@ -902,10 +937,38 @@
         }
       }
 
+      function isValidTransition(currentCategory, newCategory) {
+        if (!currentCategory) return true; // No current category means card is unanswered, allow any transition
+        const difficultyOrder = ["Again", "Hard", "Good", "Easy"];
+        const currentIndex = difficultyOrder.indexOf(currentCategory);
+        const newIndex = difficultyOrder.indexOf(newCategory);
+        
+        if (currentIndex === -1 || newIndex === -1) return true; // Unknown categories, allow
+        
+        // Allow if moving to same category
+        if (currentIndex === newIndex) return true;
+        
+        // Allow if moving to harder level (lower index)
+        if (newIndex < currentIndex) return true;
+        
+        // Allow if moving exactly 1 level easier (higher index by 1)
+        if (newIndex === currentIndex + 1) return true;
+        
+        // Disallow if moving more than 1 level easier
+        return false;
+      }
+
       async function selectCategory(cat) {
         if (!cards[index]) return;
         const card = cards[index];
         const key = String(card.id);
+        const current = progressMap[key];
+        
+        // Validate transition
+        if (!isValidTransition(current, cat)) {
+          return; // Silently ignore invalid transitions
+        }
+        
         const targetDeckId = card.deckId || deck?.id;
         progressMap[key] = cat;
         applyFilters({ preserveIndex: true });
@@ -965,8 +1028,8 @@
         const card = cards[index];
         const key = String(card.id);
         const current = ratings[key];
-        ratingUp.classList.toggle("selected", current === "up");
         ratingDown.classList.toggle("selected", current === "down");
+        ratingIgnore.classList.toggle("selected", current === "ignore");
       }
 
       async function selectRating(choice) {
@@ -1143,8 +1206,8 @@
         controls.innerHTML = "";
         controls.appendChild(createLoginButtons());
         progressEl.textContent = "";
-        ratingUp.classList.remove("selected");
         ratingDown.classList.remove("selected");
+        ratingIgnore.classList.remove("selected");
         progressFill.style.width = "0%";
         sessionMeta.textContent = "Authentication required to load study decks.";
         emptyState.style.display = "block";

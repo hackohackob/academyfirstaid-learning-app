@@ -41,6 +41,19 @@
         <div class="pill" id="statusText">Loading users...</div>
       </section>
 
+      <section id="summaryBar" class="summary-bar" style="display: none;">
+        <div class="summary-header">
+          <div>
+            <div class="eyebrow">Summary</div>
+            <h2>All users across all lessons</h2>
+          </div>
+          <div class="summary-stats" id="summaryStats"></div>
+        </div>
+        <div class="summary-bar-container">
+          <div class="stacked-bar summary-bar-large" id="summaryBarEl"></div>
+        </div>
+      </section>
+
       <section id="usersGrid" class="user-grid"></section>
     </main>
 
@@ -48,6 +61,9 @@
       const usersGrid = document.getElementById("usersGrid");
       const statusText = document.getElementById("statusText");
       const refreshBtn = document.getElementById("refreshBtn");
+      const summaryBar = document.getElementById("summaryBar");
+      const summaryBarEl = document.getElementById("summaryBarEl");
+      const summaryStats = document.getElementById("summaryStats");
 
       refreshBtn.onclick = loadUsers;
       loadUsers();
@@ -59,11 +75,13 @@
         if (res.status === 403) {
           statusText.textContent = "Admin access required.";
           usersGrid.innerHTML = `<div class="empty">You need an admin account to view users.</div>`;
+          summaryBar.style.display = "none";
           return;
         }
         if (!res.ok) {
           statusText.textContent = "Unable to load users right now.";
           usersGrid.innerHTML = `<div class="empty">Please try again in a moment.</div>`;
+          summaryBar.style.display = "none";
           return;
         }
         const data = await res.json();
@@ -74,6 +92,7 @@
         if (!users.length) {
           statusText.textContent = "No users found.";
           usersGrid.innerHTML = `<div class="empty">No registered users yet.</div>`;
+          summaryBar.style.display = "none";
           return;
         }
         statusText.textContent = `${users.length} user${users.length === 1 ? "" : "s"}`;
@@ -81,6 +100,66 @@
         users.forEach((user) => {
           usersGrid.appendChild(renderUserCard(user));
         });
+        renderSummary(users);
+      }
+
+      function renderSummary(users = []) {
+        // Aggregate all categories from all users across all decks (excluding unanswered)
+        const aggregated = users.reduce((acc, user) => {
+          const decks = user.decks || [];
+          decks.forEach((deck) => {
+            acc.Again += deck.categories?.Again || 0;
+            acc.Hard += deck.categories?.Hard || 0;
+            acc.Good += deck.categories?.Good || 0;
+            acc.Easy += deck.categories?.Easy || 0;
+          });
+          return acc;
+        }, { Again: 0, Hard: 0, Good: 0, Easy: 0 });
+
+        const totalAnswered = aggregated.Again + aggregated.Hard + aggregated.Good + aggregated.Easy;
+        
+        if (totalAnswered === 0) {
+          summaryBar.style.display = "none";
+          return;
+        }
+
+        summaryBar.style.display = "block";
+        summaryBarEl.innerHTML = "";
+
+        // Add chunks for each category (excluding unanswered)
+        addChunk(summaryBarEl, aggregated.Again, totalAnswered, "again");
+        addChunk(summaryBarEl, aggregated.Hard, totalAnswered, "hard");
+        addChunk(summaryBarEl, aggregated.Good, totalAnswered, "good");
+        addChunk(summaryBarEl, aggregated.Easy, totalAnswered, "easy");
+
+        // Update stats display
+        const againPct = totalAnswered ? Math.round((aggregated.Again / totalAnswered) * 100) : 0;
+        const hardPct = totalAnswered ? Math.round((aggregated.Hard / totalAnswered) * 100) : 0;
+        const goodPct = totalAnswered ? Math.round((aggregated.Good / totalAnswered) * 100) : 0;
+        const easyPct = totalAnswered ? Math.round((aggregated.Easy / totalAnswered) * 100) : 0;
+
+        summaryStats.innerHTML = `
+          <div class="stat">
+            <div class="stat-value">${totalAnswered.toLocaleString()}</div>
+            <div class="muted">total answered</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value" style="color: var(--report-again);">${aggregated.Again.toLocaleString()} (${againPct}%)</div>
+            <div class="muted">Again</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value" style="color: var(--report-hard);">${aggregated.Hard.toLocaleString()} (${hardPct}%)</div>
+            <div class="muted">Hard</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value" style="color: var(--report-good);">${aggregated.Good.toLocaleString()} (${goodPct}%)</div>
+            <div class="muted">Good</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value" style="color: var(--report-easy);">${aggregated.Easy.toLocaleString()} (${easyPct}%)</div>
+            <div class="muted">Easy</div>
+          </div>
+        `;
       }
 
       function renderUserCard(user) {

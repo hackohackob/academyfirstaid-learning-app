@@ -192,9 +192,46 @@ main {
 }
 
 .category-btn.selected {
-  box-shadow: 0 12px 35px rgba(88, 197, 103, 0.2);
   border-color: var(--accent);
-  background: linear-gradient(135deg, rgba(88, 197, 103, 0.18), rgba(121, 208, 133, 0.12));
+}
+
+/* Again - Red */
+.category-btn.selected[data-name="Again"] {
+  box-shadow: 0 12px 35px rgba(239, 68, 68, 0.2);
+  border-color: #ef4444;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.18), rgba(239, 68, 68, 0.12));
+}
+
+/* Hard - Orange */
+.category-btn.selected[data-name="Hard"] {
+  box-shadow: 0 12px 35px rgba(249, 115, 22, 0.2);
+  border-color: #f97316;
+  background: linear-gradient(135deg, rgba(249, 115, 22, 0.18), rgba(249, 115, 22, 0.12));
+}
+
+/* Good - Yellowish-green */
+.category-btn.selected[data-name="Good"] {
+  box-shadow: 0 12px 35px rgba(163, 214, 90, 0.2);
+  border-color: #a3d65a;
+  background: linear-gradient(135deg, rgba(163, 214, 90, 0.18), rgba(163, 214, 90, 0.12));
+}
+
+/* Easy - Green */
+.category-btn.selected[data-name="Easy"] {
+  box-shadow: 0 12px 35px rgba(34, 197, 94, 0.2);
+  border-color: #22c55e;
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.18), rgba(34, 197, 94, 0.12));
+}
+
+.category-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.category-btn:disabled:hover {
+  transform: none;
+  border-color: var(--border);
 }
 
 .category-meta {
